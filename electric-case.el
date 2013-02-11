@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.0.4
+;; Version: 1.0.5
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -98,12 +98,13 @@
 ;; 1.0.2 minor fixes
 ;; 1.0.3 improved electric-case-java-init
 ;; 1.0.4 fixed electric-case-java-init
+;; 1.0.5 improved electric-case-c-init
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.0.4")
+(defconst electric-case-version "1.0.5")
 
 ;; * variables
 
@@ -197,64 +198,23 @@
     (let ((electric-case-mode nil))
       (call-interactively (key-binding (this-single-command-keys))))))
 
-;; * examples
+;; * cc-mode example
 
-(defun electric-case-c-init ()
+(defun electric-case-letbuf (beg end str &rest sexps)
+  (let ((ret (point)) (prev (buffer-substring beg end)) e val)
+    (kill-region beg end)
+    (goto-char beg)
+    (insert str)
+    (setq e (point))
+    (goto-char (+ ret (- (length str) (length prev))))
+    (setq val (eval (cons 'progn sexps)))
+    (kill-region beg e)
+    (goto-char beg)
+    (insert prev)
+    (goto-char ret)
+    val))
 
-  (electric-case-mode 1)
-
-  (setq electric-case-criteria
-        (lambda (b e)
-          (let ((proper (text-properties-at b)))
-            (cond ((member 'font-lock-function-name-face proper) 'snake)
-                  ((member 'font-lock-variable-name-face proper)
-                   (if (member '(cpp-macro) (c-guess-basic-syntax))
-                       'usnake 'snake))
-                  (t nil)))))
-
-  (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd ";") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
-  )
-
-(defconst electric-case-java-primitives
-  '("boolean" "char" "byte" "short" "int" "long" "float" "double" "void"))
-
-(defun electric-case-java-init ()
-
-  (electric-case-mode 1)
-
-  ;; this implementation looks not smart...
-  (defun electric-case-letbuf (beg end str &rest sexps)
-    (let ((ret (point)) (prev (buffer-substring beg end)) e val)
-      (kill-region beg end)
-      (goto-char beg)
-      (insert str)
-      (setq e (point))
-      (goto-char (+ ret (- (length str) (length prev))))
-      (setq val (eval (cons 'progn sexps)))
-      (kill-region beg e)
-      (goto-char beg)
-      (insert prev)
-      (goto-char ret)
-      val))
-
-  (setq electric-case-criteria
-        (lambda (b e)
-          (when (not (member (buffer-substring b e) electric-case-java-primitives))
-            (let ((proper (electric-case-letbuf
-                           b e
-                           (replace-regexp-in-string "-" "" (buffer-substring b e))
-                           '(font-lock-fontify-block)
-                           `(text-properties-at ,b))))
-              (cond ((member 'font-lock-function-name-face proper) 'camel)
-                    ((member 'font-lock-variable-name-face proper) 'camel)
-                    ((member 'font-lock-type-face proper) 'ucamel)
-                    (t nil))))))
-
-  (defun electric-case-java-semi ()
+  (defun electric-case-cc-semi ()
     (interactive)
     (insert ";")
     (backward-char)
@@ -266,9 +226,56 @@
       (let ((electric-case-mode nil))
         (call-interactively (key-binding (this-single-command-keys))))))
 
+(defun electric-case-c-init ()
+
+  (electric-case-mode 1)
+
+  (setq electric-case-criteria
+        (lambda (b e)
+          (let ((proper (electric-case-letbuf
+                           b e
+                           (replace-regexp-in-string "-" "" (buffer-substring b e))
+                           '(font-lock-fontify-block)
+                           `(text-properties-at ,b))))
+            (cond ((member 'font-lock-function-name-face proper) 'snake)
+                  ((member 'font-lock-variable-name-face proper)
+                   (if (member '(cpp-macro) (c-guess-basic-syntax))
+                       'usnake 'snake))
+                  ((member 'font-lock-type-face proper) 'snake)
+                  (t nil)))))
+
   (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd ";") 'electric-case-java-semi)
+  (define-key electric-case-mode-map (kbd ";") 'electric-case-cc-semi)
+  (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
+  (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
+  )
+
+(defconst electric-case-java-primitives
+  '("boolean" "char" "byte" "short" "int" "long" "float" "double" "void"))
+
+(defun electric-case-java-init ()
+
+  (electric-case-mode 1)
+
+  (setq electric-case-criteria
+        (lambda (b e)
+          (when (not (member (buffer-substring b e) electric-case-java-primitives))
+            (let ((proper (electric-case-letbuf
+                           b e
+                           (replace-regexp-in-string "-" "" (buffer-substring b e))
+                           '(font-lock-fontify-block)
+                           `(text-properties-at ,b))))
+              (cond ((member 'font-lock-function-name-face proper) 'camel)
+                    ((member 'font-lock-variable-name-face proper) 'camel)
+                    ((member 'font-lock-type-face proper)
+                     (if (not (member (buffer-substring b e) electric-case-java-primitives))
+                         'ucamel))
+                    (t nil))))))
+
+  (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
+  (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
+  (define-key electric-case-mode-map (kbd ";") 'electric-case-cc-semi)
   (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "{") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
