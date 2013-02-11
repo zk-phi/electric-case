@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.0.0
+;; Version: 1.0.2
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -94,13 +94,14 @@
 ;;; Change Log:
 
 ;; 1.0.0 first released
-;; 1.0.1 fixed errors in java-init
+;; 1.0.1 modified electric-case-java-init
+;; 1.0.2 minor fixes
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.0.1")
+(defconst electric-case-version "1.0.2")
 
 ;; * variables
 
@@ -132,33 +133,63 @@
 
 ;; * utilities
 
-;; reference | http://www.emacswiki.org/emacs/CamelCase
+(defmacro electric-case-save-excursion (&rest sexps)
+  `(progn
+     (insert "")
+     (backward-char)
+     ,@sexps
+     (search-forward "")
+     (delete-char -1)))
 
-(defun electric-case-convert (str type)
-  (let ((wlst (split-string str "-")))
-    (cond ((eq type 'ucamel)
-           (mapconcat '(lambda (w) (capitalize w)) wlst ""))
-          ((eq type 'camel)
-           (concat
-            (car wlst)
-            (mapconcat '(lambda (w) (capitalize w)) (cdr wlst) "")))
-          ((eq type 'snake)
-           (mapconcat 'identity wlst "_"))
-          ((eq type 'usnake)
-           (mapconcat '(lambda (w) (upcase w)) wlst "_"))
-          (t
-           (mapconcat 'identity wlst "-")))))
+(defun electric-case-backward-symbol (&optional n)
+  (interactive)
+  (when (null n) (setq n 1))
+  (while (>= (setq n (1- n)) 0)
+    (backward-word)
+    (goto-char (+ (point) (skip-chars-backward "[:alnum:]-")))))
+
+(defun electric-case-forward-symbol (&optional n)
+  (interactive)
+  (when (null n) (setq n 1))
+  (while (>= (setq n (1- n)) 0)
+    (forward-word)
+    (goto-char (+ (point) (skip-chars-forward "[:alnum:]-")))))
+
+;; * functions, commands
+
+(defun electric-case-convert-previous (n)
+  (electric-case-save-excursion
+   (if (< (point)
+          (progn (electric-case-backward-symbol n)
+                 (electric-case-forward-symbol) (point)))
+       ;; no symbols to convert found before cursor
+       ;; => backward-word, in preparation of e-c-save-excursion
+       (backward-word)
+     ;; convert the symbol before cursor, and replace
+     (let* ((beg (save-excursion (electric-case-backward-symbol) (point)))
+            (end (point))
+            (type (apply electric-case-criteria (list beg end)))
+            (wlst (split-string (buffer-substring-no-properties beg end) "-"))
+            (convstr (cond ((eq type 'ucamel)
+                            (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
+                           ((eq type 'camel)
+                            (concat
+                             (car wlst)
+                             (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
+                           ((eq type 'usnake)
+                            (mapconcat '(lambda (w) (upcase w)) wlst "_"))
+                           ((eq type 'snake)
+                            (mapconcat 'identity wlst "_"))
+                           (t
+                            (mapconcat 'identity wlst "-")))))
+       (delete-region beg end)
+       (goto-char beg)
+       (insert convstr)))))
 
 (defun electric-case-trigger ()
   (interactive)
-  (let* ((beg (save-excursion (+ (point) (skip-chars-backward "[:alnum:]-"))))
-         (end (point))
-         (str (buffer-substring-no-properties beg end))
-         (type (apply electric-case-criteria (list beg end))))
-    ;; replace original symbol with converted symbol
-    (delete-region beg end)
-    (goto-char beg)
-    (insert (electric-case-convert str type)))
+  (electric-case-convert-previous 2)
+  (electric-case-convert-previous 1)
   ;; call original command
   (when (interactive-p)
     (let ((electric-case-mode nil))
@@ -186,21 +217,21 @@
   (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
   )
 
-(defconst electric-case-java-exeptions
-  '("boolean" "char" "byte" "short" "int" "long" "float" "double" "void"
-    "class" "public" "private" "protected" "static" "final" "abstract"
-    "strictfp" "transient" "volatile" "new"))
+(defconst electric-case-java-primitives
+  '("boolean" "char" "byte" "short" "int" "long" "float" "double" "void"))
 
 (defun electric-case-java-init ()
 
   (electric-case-mode 1)
 
+  ;; *FIXME*
+  ;; object obj-name;  =>  Object objName; (OK)
+  ;; buffered-reader br;  =>  buffered-reader br; (NG)
   (setq electric-case-criteria
         (lambda (b e)
-          (when (not (member (buffer-substring b e) electric-case-java-exeptions))
-            (let ((proper (text-properties-at b))
-                  (key (key-description (this-single-command-keys))))
-              (cond ((member 'font-lock-function-name-face proper) 'ucamel)
+          (when (not (member (buffer-substring b e) electric-case-java-primitives))
+            (let ((proper (text-properties-at b)))
+              (cond ((member 'font-lock-function-name-face proper) 'camel)
                     ((member 'font-lock-variable-name-face proper) 'camel)
                     ((member 'font-lock-type-face proper) 'ucamel)
                     (t nil))))))
