@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.0.3
+;; Version: 1.0.4
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -97,12 +97,13 @@
 ;; 1.0.1 modified electric-case-java-init
 ;; 1.0.2 minor fixes
 ;; 1.0.3 improved electric-case-java-init
+;; 1.0.4 fixed electric-case-java-init
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.0.3")
+(defconst electric-case-version "1.0.4")
 
 ;; * variables
 
@@ -244,7 +245,8 @@
         (lambda (b e)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case-letbuf
-                           b e (replace-regexp-in-string "-" "" (buffer-substring b e))
+                           b e
+                           (replace-regexp-in-string "-" "" (buffer-substring b e))
                            '(font-lock-fontify-block)
                            `(text-properties-at ,b))))
               (cond ((member 'font-lock-function-name-face proper) 'camel)
@@ -252,9 +254,21 @@
                     ((member 'font-lock-type-face proper) 'ucamel)
                     (t nil))))))
 
+  (defun electric-case-java-semi ()
+    (interactive)
+    (insert ";")
+    (backward-char)
+    (electric-case-trigger)
+    (forward-char)
+    (delete-char -1)
+    ;; call original command
+    (when (interactive-p)
+      (let ((electric-case-mode nil))
+        (call-interactively (key-binding (this-single-command-keys))))))
+
   (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
-  (define-key electric-case-mode-map (kbd ";") 'electric-case-trigger)
+  (define-key electric-case-mode-map (kbd ";") 'electric-case-java-semi)
   (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "{") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
