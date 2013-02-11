@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.0.2
+;; Version: 1.0.3
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -96,12 +96,13 @@
 ;; 1.0.0 first released
 ;; 1.0.1 modified electric-case-java-init
 ;; 1.0.2 minor fixes
+;; 1.0.3 improved electric-case-java-init
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.0.2")
+(defconst electric-case-version "1.0.3")
 
 ;; * variables
 
@@ -224,13 +225,28 @@
 
   (electric-case-mode 1)
 
-  ;; *FIXME*
-  ;; object obj-name;  =>  Object objName; (OK)
-  ;; buffered-reader br;  =>  buffered-reader br; (NG)
+  ;; this implementation looks not smart...
+  (defun electric-case-letbuf (beg end str &rest sexps)
+    (let ((ret (point)) (prev (buffer-substring beg end)) e val)
+      (kill-region beg end)
+      (goto-char beg)
+      (insert str)
+      (setq e (point))
+      (goto-char (+ ret (- (length str) (length prev))))
+      (setq val (eval (cons 'progn sexps)))
+      (kill-region beg e)
+      (goto-char beg)
+      (insert prev)
+      (goto-char ret)
+      val))
+
   (setq electric-case-criteria
         (lambda (b e)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
-            (let ((proper (text-properties-at b)))
+            (let ((proper (electric-case-letbuf
+                           b e (replace-regexp-in-string "-" "" (buffer-substring b e))
+                           '(font-lock-fontify-block)
+                           `(text-properties-at ,b))))
               (cond ((member 'font-lock-function-name-face proper) 'camel)
                     ((member 'font-lock-variable-name-face proper) 'camel)
                     ((member 'font-lock-type-face proper) 'ucamel)
