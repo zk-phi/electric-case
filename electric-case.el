@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.0.5
+;; Version: 1.1.0
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -40,6 +40,27 @@
 ;;       public void testMethod(void){
 ;;
 ;; "electric-case-java-init" and "electric-case-c-init" is prepared by default.
+
+;; Object reference, and method calls are not converted by default. But you may
+;; enable by evaluating code below:
+;;
+;;   (setq electric-case-cc-convert-calls t)
+;;
+;; Now expression below
+;;
+;;   object-name.method-name();
+;;
+;; is comverted to
+;;
+;;   objectName.methodName();
+;;
+;; To use UpperCamelCase, type something like:
+;;
+;;   -long-name-class-example.static-method();
+;;
+;; then it is comverted to
+;;
+;;   LongNameClassExample.staticMethod();
 
 ;; 2. Adding settings
 
@@ -99,12 +120,13 @@
 ;; 1.0.3 improved electric-case-java-init
 ;; 1.0.4 fixed electric-case-java-init
 ;; 1.0.5 improved electric-case-c-init
+;; 1.1.0 added electric-case-cc-convert-calls
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.0.5")
+(defconst electric-case-version "1.1.0")
 
 ;; * variables
 
@@ -200,6 +222,8 @@
 
 ;; * cc-mode example
 
+(defvar electric-case-cc-convert-calls nil)
+
 (defun electric-case-letbuf (beg end str &rest sexps)
   (let ((ret (point)) (prev (buffer-substring beg end)) e val)
     (kill-region beg end)
@@ -236,12 +260,14 @@
                            b e
                            (replace-regexp-in-string "-" "" (buffer-substring b e))
                            '(font-lock-fontify-block)
-                           `(text-properties-at ,b))))
+                           `(text-properties-at ,b)))
+                (key (key-description (this-single-command-keys))))
             (cond ((member 'font-lock-function-name-face proper) 'snake)
+                  ((member 'font-lock-type-face proper) 'snake)
                   ((member 'font-lock-variable-name-face proper)
                    (if (member '(cpp-macro) (c-guess-basic-syntax))
                        'usnake 'snake))
-                  ((member 'font-lock-type-face proper) 'snake)
+                  ((and electric-case-cc-convert-calls (string= key "(")) 'snake)
                   (t nil)))))
 
   (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
@@ -265,12 +291,21 @@
                            b e
                            (replace-regexp-in-string "-" "" (buffer-substring b e))
                            '(font-lock-fontify-block)
-                           `(text-properties-at ,b))))
+                           `(text-properties-at ,b))) ; text properties at b
+                  (key (key-description (this-single-command-keys))) ; this command keys
+                  (pred (if (> (1- b) 0) (buffer-substring (1- b) b) "")) ; char before b
+                  )
+              (message "pred : %s" pred)
               (cond ((member 'font-lock-function-name-face proper) 'camel)
                     ((member 'font-lock-variable-name-face proper) 'camel)
                     ((member 'font-lock-type-face proper)
                      (if (not (member (buffer-substring b e) electric-case-java-primitives))
                          'ucamel))
+                    (electric-case-cc-convert-calls
+                     (if (or (string= key ".")
+                             (string= key "(")
+                             (string= pred "."))
+                         'camel))
                     (t nil))))))
 
   (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
