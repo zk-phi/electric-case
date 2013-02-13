@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.1.4
+;; Version: 1.2.0
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -61,6 +61,10 @@
 ;; then it is comverted into
 ;;
 ;;   LongNameClassExample.staticMethod();
+
+;; If overlay is not confortable for you, evaluate following expression to disable.
+;;
+;;   (setq electric-case-pending-overlay nil)
 
 ;; 2. Configuration
 
@@ -149,12 +153,13 @@
 ;; 1.1.2 added ahk-mode settings
 ;; 1.1.3 added scala-mode settings, and refactord
 ;; 1.1.4 fixes and improvements
+;; 1.2.0 added pending-overlay
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.1.4")
+(defconst electric-case-version "1.2.0")
 
 ;; * customs
 
@@ -306,33 +311,30 @@
     (let ((electric-case-mode nil))
       (call-interactively (key-binding (this-single-command-keys))))))
 
-;; * FIXME overlay
+;; * overlay
 
-;; ;; -- NOTE: CODE BELOW SOMETIMES HANGS UP --
+(defun electric-case-remove-overlays ()
+  (save-restriction
+    (widen)
+    (remove-overlays (point-min) (point-max) 'category 'electric-case)))
 
-;; (defun electric-case-remove-overlays ()
-;;   (save-restriction
-;;     (widen)
-;;     (remove-overlays (point-min) (point-max) 'category 'electric-case)))
+(defun electric-case-put-overlay (n)
+  (let ((range (electric-case-range n)))
+    (when range
+      (let ((ov (make-overlay (car range) (cdr range))))
+        (overlay-put ov 'face '((t (:inherit shadow))))
+        (overlay-put ov 'category 'electric-case)))))
 
-;; (defun electric-case-put-overlay (n)
-;;   (let ((range (electric-case-range n)))
-;;     (when range
-;;       (let ((ov (make-overlay (car range) (cdr range))))
-;;         (overlay-put ov 'face 'dired-ignored)
-;;         (overlay-put ov 'category 'electric-case)))))
+(defun electric-case-after-change-function (x xx xxx)
+  (when (and electric-case-mode
+             electric-case-pending-overlay
+             (eq 'self-insert-command (key-binding (this-single-command-keys))))
+    (let (n)
+      (dotimes (n electric-case-max-iteration)
+        (electric-case-put-overlay (- electric-case-max-iteration n))))))
 
-;; (defun electric-case-after-change-function (x xx xxx)
-;;   (when (and electric-case-mode
-;;              electric-case-pending-overlay
-;;              (eq 'self-insert-command (key-binding (this-single-command-keys))))
-;;     (electric-case-remove-overlays)
-;;     (let (n)
-;;       (dotimes (n electric-case-max-iteration)
-;;         (electric-case-put-overlay (- electric-case-max-iteration n))))))
-
-;; (run-with-idle-timer 1 t 'electric-case-remove-overlays)
-;; (add-hook 'after-change-functions 'electric-case-after-change-function)
+(run-with-idle-timer 0.8 t 'electric-case-remove-overlays)
+(add-hook 'after-change-functions 'electric-case-after-change-function)
 
 ;; * settings
 ;; ** utilities
