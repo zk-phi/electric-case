@@ -1,6 +1,6 @@
 ;;; electric-case.el --- Electric case conversion.
 
-;; Copyright (C) 2012 zk_phi
+;; Copyright (C) 2013 zk_phi
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.1.0
+;; Version: 1.1.1
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -24,7 +24,7 @@
 
 ;; 1. Usage
 
-;; For example, to try electric-case-mode in java-mode, add following expression
+;; For example, to try electric-case-mode in java-mode, put following expression
 ;; into your init file.
 ;;
 ;;   (add-hook 'java-mode-hook electric-case-java-init)
@@ -40,8 +40,7 @@
 ;;       public void testMethod(void){
 ;;
 ;; "electric-case-java-init" and "electric-case-c-init" is prepared by default.
-
-;; Object reference, and method calls are not converted by default. But you may
+;; Field reference, and method calls are not converted by default. But you may
 ;; enable by evaluating code below:
 ;;
 ;;   (setq electric-case-cc-convert-calls t)
@@ -50,7 +49,7 @@
 ;;
 ;;   object-name.method-name();
 ;;
-;; is comverted to
+;; is comverted into
 ;;
 ;;   objectName.methodName();
 ;;
@@ -58,11 +57,11 @@
 ;;
 ;;   -long-name-class-example.static-method();
 ;;
-;; then it is comverted to
+;; then it is comverted into
 ;;
 ;;   LongNameClassExample.staticMethod();
 
-;; 2. Adding settings
+;; 2. Configuration
 
 ;; There are three important buffer-local variables. To add settings for other
 ;; languages, set these variables.
@@ -70,70 +69,68 @@
 ;; * electric-case-mode
 ;;
 ;;   When non-nil, electric-case-mode-map is activated
-;;
-;;     (electric-case-mode 1)
 
 ;; * electric-case-mode-map
 ;;
-;;   Bind keys that you want use as electric-case trigger, to "electric-case-trigger"
-;;   command. When triggered, the previous symbol before cursor will be converted.
+;;   Bind keys that you want use as electric-case trigger. When triggered, 2 symbols
+;;   just before the cursor will be converted.
 ;;
 ;;     (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
 ;;     (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
 ;;     (define-key electric-case-mode-map (kbd ";") 'electric-case-trigger)
 ;;     (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
 ;;
-;;   Note that "electric-case-trigger" command will call original command, after
+;;   Note that "electric-case-trigger" command will also call original command after
 ;;   conversion. For example, even if (kbd "SPC") is bound to electric-case trigger,
 ;;   still whitespace is inserted with (kbd "SPC").
 
 ;; * electric-case-criteria
 ;;
 ;;   Set a function that defines which case to convert the symbol into. The function
-;;   will be given 2 arguments: beginning point of the symbol, and end point of the
-;;   symbol. The function must return 'camel, 'ucamel, 'snake, 'usnake, or nil. When
-;;   the return value is nil, the symbol will not be converted.
+;;   will be given 3 arguments: the beginning and end point of the symbol that is going
+;;   to be converted, and number of symbols between this symbol and the cursor. The
+;;   function must return one of 'camel, 'ucamel, 'snake, 'usnake, and nil. When the
+;;   return value is nil, the symbol will not be converted.
+;;
+;;   Here is an example:
 ;;
 ;;     (setq electric-case-criteria
-;;           (lambda (b e)
+;;           (lambda (b e n)
 ;;             (let ((proper (text-properties-at b)))
 ;;               (cond ((member 'font-lock-function-name-face proper) 'snake)
 ;;                     ((member 'font-lock-variable-name-face proper)
 ;;                      (if (member '(cpp-macro) (c-guess-basic-syntax))
-;;                          'usnake 'snake)
+;;                          'usnake 'snake))
 ;;                     (t nil)))))
 ;;
-;;   For example, with criteria above, function declarations and variable declarations
-;;   are converted into snake_case. Macro declarations are converted into UP_SNAKE_CASE.
+;;   with criteria above, function declarations and variable declarations are converted
+;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE.
 ;;
 ;;     int a-variable;  =>  int a_variable;
 ;;
-;;   But other expressions are not converted.
+;;     #define macro_name => #define MACRO_NAME
+;;
+;;   But other expressions are not converted, even if that contain "-".
 ;;
 ;;     a = b-c;  =>  a = b-c; (NOT "a = bC;")
 
 ;;; Change Log:
 
 ;; 1.0.0 first released
-;; 1.0.1 modified electric-case-java-init
-;; 1.0.2 minor fixes
-;; 1.0.3 improved electric-case-java-init
-;; 1.0.4 fixed electric-case-java-init
-;; 1.0.5 improved electric-case-c-init
 ;; 1.1.0 added electric-case-cc-convert-calls
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.1.0")
+(defconst electric-case-version "1.1.1")
 
 ;; * variables
 
 (defvar electric-case-mode nil)
 (make-variable-buffer-local 'electric-case-mode)
 
-(defvar electric-case-criteria (lambda (b e) 'camel))
+(defvar electric-case-criteria (lambda (b e n) 'camel))
 (make-variable-buffer-local 'electric-case-criteria)
 
 (defvar electric-case-mode-map (make-sparse-keymap))
@@ -193,7 +190,7 @@
      ;; convert the symbol before cursor, and replace
      (let* ((beg (save-excursion (electric-case-backward-symbol) (point)))
             (end (point))
-            (type (apply electric-case-criteria (list beg end)))
+            (type (apply electric-case-criteria (list beg end (1- n))))
             (wlst (split-string (buffer-substring-no-properties beg end) "-"))
             (convstr (cond ((eq type 'ucamel)
                             (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
@@ -255,7 +252,7 @@
   (electric-case-mode 1)
 
   (setq electric-case-criteria
-        (lambda (b e)
+        (lambda (b e n)
           (let ((proper (electric-case-letbuf
                            b e
                            (replace-regexp-in-string "-" "" (buffer-substring b e))
@@ -267,7 +264,9 @@
                   ((member 'font-lock-variable-name-face proper)
                    (if (member '(cpp-macro) (c-guess-basic-syntax))
                        'usnake 'snake))
-                  ((and electric-case-cc-convert-calls (string= key "(")) 'snake)
+                  ((and electric-case-cc-convert-calls (= n 0)
+                        (string= key "("))
+                   'snake)
                   (t nil)))))
 
   (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
@@ -285,7 +284,7 @@
   (electric-case-mode 1)
 
   (setq electric-case-criteria
-        (lambda (b e)
+        (lambda (b e n)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case-letbuf
                            b e
@@ -301,7 +300,7 @@
                     ((member 'font-lock-type-face proper)
                      (if (not (member (buffer-substring b e) electric-case-java-primitives))
                          'ucamel))
-                    (electric-case-cc-convert-calls
+                    ((and electric-case-cc-convert-calls (= n 0))
                      (if (or (string= key ".")
                              (string= key "(")
                              (string= pred "."))
