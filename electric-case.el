@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.1.3
+;; Version: 1.1.4
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -67,10 +67,6 @@
 ;; There are three important buffer-local variables. To add settings for other
 ;; languages, set these variables.
 
-;; - electric-case-mode
-;;
-;;   When non-nil, electric-case-mode-map is activated
-
 ;; - electric-case-mode-map
 ;;
 ;;   Bind keys that you want use as electric-case trigger. When triggered, 2 symbols
@@ -115,6 +111,31 @@
 ;;
 ;;     a = b-c;  =>  a = b-c; (NOT "a = bC;")
 
+;; - electric-case-max-iteration
+;;
+;;   Set the maximum number of iteration. For example, in condition below, the syntactical
+;;   category of the symbol "what-is-this" is not decidable.
+;;
+;;     public void foo(void){
+;;         what-is-this
+;;     }
+;;
+;;   But when ".bar();" is added, now "what-is-this" is a name of an object.
+;;
+;;     public void foo(void){
+;;         what-is-this.bar();
+;;     }
+;;
+;;   So electric-case can convert it.
+;;
+;;     public void foo(void){
+;;         whatIsThis.bar();
+;;     }
+;;
+;;   In the example above, the symbol "what-is-this" is checked twice. If
+;;   "electric-case-max-iteration" is 1, "what-is-this" is not checked more
+;;   than twice, so not converted.
+
 ;;; Change Log:
 
 ;; 1.0.0 first released
@@ -127,12 +148,22 @@
 ;; 1.1.1 modified arguments for criteria function
 ;; 1.1.2 added ahk-mode settings
 ;; 1.1.3 added scala-mode settings, and refactord
+;; 1.1.4 fixes and improvements
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.1.3")
+(defconst electric-case-version "1.1.4")
+
+;; * customs
+
+(defvar electric-case-convert-calls nil)
+
+(defvar electric-case-pending-overlay t)
+
+(defvar electric-case-max-iteration 2)
+(make-variable-buffer-local 'electric-case-max-iteration)
 
 ;; * mode variables
 
@@ -197,90 +228,123 @@
                                  ((> arg 0) t)
                                  (t nil))))
 
-;; * utilities
-
-(defmacro electric-case-save-excursion (&rest sexps)
-  `(progn
-     (insert "")
-     (backward-char)
-     ,@sexps
-     (search-forward "")
-     (delete-char -1)))
+;; * case conversion
+;; ** utilities
 
 (defun electric-case-backward-symbol (&optional n)
-  (when (null n) (setq n 1))
+  (setq n (or n 1))
   (while (>= (setq n (1- n)) 0)
+    (when (= (point) (point-min)) (error "beginning of buffer"))
     (backward-word)
-    (goto-char (+ (point) (skip-chars-backward "[:alnum:]-")))))
+    (skip-chars-backward "[:alnum:]-")))
 
 (defun electric-case-forward-symbol (&optional n)
-  (when (null n) (setq n 1))
+  (setq n (or n 1))
   (while (>= (setq n (1- n)) 0)
+    (when (= (point) (point-max)) (error "end of buffer"))
     (forward-word)
-    (goto-char (+ (point) (skip-chars-forward "[:alnum:]-")))))
+    (skip-chars-forward "[:alnum:]-")))
 
-;; * functions, commands
+(defun electric-case-end-of-symbol-p ()
+  (and (= (save-excursion
+            (skip-chars-forward "[:alnum:]-" (1+ (point)))) 0)
+       (= (save-excursion
+            (skip-chars-backward "[:alnum:]-" (1- (point)))) -1)))
+
+(defun electric-case-replace-buffer (beg end str)
+    (let ((pos (point))
+          (oldstr (buffer-substring beg end)))
+      (kill-region beg end)
+      (goto-char beg)
+      (insert str)
+      (goto-char (+ pos (- (length str) (length oldstr))))))
+
+;; ** commands
 
 (defun electric-case-convert-previous (n)
-  (electric-case-save-excursion
-   (if (< (point)
-          (progn (electric-case-backward-symbol n)
-                 (electric-case-forward-symbol) (point)))
-       ;; no symbols to convert found before cursor
-       ;; => backward-word, in preparation of e-c-save-excursion
-       (backward-word)
-     ;; convert the symbol before cursor, and replace
-     (let* ((beg (save-excursion (electric-case-backward-symbol) (point)))
-            (end (point))
-            (type (apply electric-case-criteria (list beg end (1- n))))
-            (wlst (split-string (buffer-substring-no-properties beg end) "-"))
-            (convstr (cond ((eq type 'ucamel)
-                            (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
-                           ((eq type 'camel)
-                            (concat
-                             (car wlst)
-                             (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
-                           ((eq type 'usnake)
-                            (mapconcat '(lambda (w) (upcase w)) wlst "_"))
-                           ((eq type 'snake)
-                            (mapconcat 'identity wlst "_"))
-                           (t
-                            (mapconcat 'identity wlst "-")))))
-       (delete-region beg end)
-       (goto-char beg)
-       (insert convstr)))))
+  (let* ((pos (point))
+         (range (electric-case-range n)))
+    (when (and (electric-case-end-of-symbol-p) range)
+      (let* ((beg (car range))
+             (end (cdr range))
+             (type (apply electric-case-criteria (list beg end (1- n))))
+             (str (buffer-substring beg end))
+             (wlst (split-string str "-"))
+             (convstr (cond ((eq type 'ucamel)
+                             (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
+                            ((eq type 'camel)
+                             (concat
+                              (car wlst)
+                              (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
+                            ((eq type 'usnake)
+                             (mapconcat '(lambda (w) (upcase w)) wlst "_"))
+                            ((eq type 'snake)
+                             (mapconcat 'identity wlst "_"))
+                            (t
+                             (mapconcat 'identity wlst "-")))))
+        (electric-case-replace-buffer beg end convstr)))))
+
+(defun electric-case-range (n)
+  (save-excursion
+    (let* ((pos (point))
+           (beg (condition-case err
+                    (progn (electric-case-backward-symbol n) (point))
+                  (error nil)))
+           (end (when beg
+                  (goto-char beg) (electric-case-forward-symbol) (point))))
+      (if (and end (<= end pos))
+          (cons beg end)
+        nil))))
 
 (defun electric-case-trigger ()
   (interactive)
-  (electric-case-convert-previous 2)
-  (electric-case-convert-previous 1)
+  (let (n)
+    (dotimes (n electric-case-max-iteration)
+      (electric-case-convert-previous (- electric-case-max-iteration n))))
   ;; call original command
   (when (interactive-p)
     (let ((electric-case-mode nil))
       (call-interactively (key-binding (this-single-command-keys))))))
 
-;; * example settings
-;; ** variables
+;; * FIXME overlay
 
-(defvar electric-case-convert-calls nil)
+;; ;; -- NOTE: CODE BELOW SOMETIMES HANGS UP --
 
+;; (defun electric-case-remove-overlays ()
+;;   (save-restriction
+;;     (widen)
+;;     (remove-overlays (point-min) (point-max) 'category 'electric-case)))
+
+;; (defun electric-case-put-overlay (n)
+;;   (let ((range (electric-case-range n)))
+;;     (when range
+;;       (let ((ov (make-overlay (car range) (cdr range))))
+;;         (overlay-put ov 'face 'dired-ignored)
+;;         (overlay-put ov 'category 'electric-case)))))
+
+;; (defun electric-case-after-change-function (x xx xxx)
+;;   (when (and electric-case-mode
+;;              electric-case-pending-overlay
+;;              (eq 'self-insert-command (key-binding (this-single-command-keys))))
+;;     (electric-case-remove-overlays)
+;;     (let (n)
+;;       (dotimes (n electric-case-max-iteration)
+;;         (electric-case-put-overlay (- electric-case-max-iteration n))))))
+
+;; (run-with-idle-timer 1 t 'electric-case-remove-overlays)
+;; (add-hook 'after-change-functions 'electric-case-after-change-function)
+
+;; * settings
 ;; ** utilities
 
-(defun electric-case-possible-properties (beg end &optional capital)
+(defun electric-case-possible-properties (beg end)
   (let* ((ret (point))
-         (str1 (buffer-substring beg end))
-         (str2 (replace-regexp-in-string "-" "" str1))
-         (str3 (if capital (capitalize str2) str2))
-         (a-end (progn (kill-region beg end)
-                       (goto-char beg)
-                       (insert str3)
-                       (point)))
-         (val (progn (font-lock-fontify-block)
+         (str (buffer-substring beg end))
+         (convstr (replace-regexp-in-string "-" "" str))
+         (val (progn (electric-case-replace-buffer beg end convstr)
+                     (font-lock-fontify-block)
                      (text-properties-at beg))))
-    (kill-region beg a-end)
-    (goto-char beg)
-    (insert str1)
-    (goto-char ret)
+    (electric-case-replace-buffer beg (+ beg (length convstr)) str)
     val))
 
 (defun electric-case-cc-semi ()
@@ -300,10 +364,12 @@
 (defun electric-case-c-init ()
 
   (electric-case-mode 1)
+  (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
         (lambda (b e n)
-          (let ((proper (electric-case-possible-properties b e)))
+          (let ((proper (electric-case-possible-properties b e))
+                (key (key-description (this-single-command-keys))))
             (cond ((member 'font-lock-function-name-face proper) 'snake)
                   ((member 'font-lock-type-face proper) 'snake)
                   ((member 'font-lock-variable-name-face proper)
@@ -323,6 +389,7 @@
 (defun electric-case-java-init ()
 
   (electric-case-mode 1)
+  (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
         (lambda (b e n)
@@ -342,6 +409,7 @@
 (defun electric-case-scala-init ()
 
   (electric-case-mode 1)
+  (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
         (lambda (b e n)
@@ -359,6 +427,7 @@
 (defun electric-case-ahk-init ()
 
   (electric-case-mode 1)
+  (setq electric-case-max-iteration 1)
 
   (setq electric-case-criteria
         (lambda (b e n)
