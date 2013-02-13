@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.1.1
+;; Version: 1.1.2
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -43,7 +43,7 @@
 ;; Field reference, and method calls are not converted by default. But you may
 ;; enable by evaluating code below:
 ;;
-;;   (setq electric-case-cc-convert-calls t)
+;;   (setq electric-case-convert-calls t)
 ;;
 ;; Now expression below
 ;;
@@ -117,13 +117,20 @@
 ;;; Change Log:
 
 ;; 1.0.0 first released
-;; 1.1.0 added electric-case-cc-convert-calls
+;; 1.0.1 fixed java settings
+;; 1.0.2 minor fixes
+;; 1.0.3 fixed java settings
+;; 1.0.4 fixed java settings
+;; 1.0.5 fixed C settings
+;; 1.1.0 added electric-case-convert-calls
+;; 1.1.1 modified arguments for criteria function
+;; 1.1.2 added ahk-mode settings, renamed "cc-convert-calls"
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.1.1")
+(defconst electric-case-version "1.1.2")
 
 ;; * variables
 
@@ -219,7 +226,7 @@
 
 ;; * cc-mode example
 
-(defvar electric-case-cc-convert-calls nil)
+(defvar electric-case-convert-calls nil)
 
 (defun electric-case-letbuf (beg end str &rest sexps)
   (let ((ret (point)) (prev (buffer-substring beg end)) e val)
@@ -264,7 +271,7 @@
                   ((member 'font-lock-variable-name-face proper)
                    (if (member '(cpp-macro) (c-guess-basic-syntax))
                        'usnake 'snake))
-                  ((and electric-case-cc-convert-calls (= n 0)
+                  ((and electric-case-convert-calls (= n 0)
                         (string= key "("))
                    'snake)
                   (t nil)))))
@@ -300,7 +307,7 @@
                     ((member 'font-lock-type-face proper)
                      (if (not (member (buffer-substring b e) electric-case-java-primitives))
                          'ucamel))
-                    ((and electric-case-cc-convert-calls (= n 0))
+                    ((and electric-case-convert-calls (= n 0))
                      (if (or (string= key ".")
                              (string= key "(")
                              (string= pred "."))
@@ -314,6 +321,18 @@
   (define-key electric-case-mode-map (kbd "{") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd "=") 'electric-case-trigger)
   (define-key electric-case-mode-map (kbd ".") 'electric-case-trigger)
+  )
+
+(defun electric-case-ahk-init ()
+
+  (electric-case-mode 1)
+
+  (setq electric-case-criteria
+        (lambda (b e n)
+          (let ((key (key-description (this-single-command-keys))))
+            (when (and electric-case-convert-calls (= n 0)) 'camel))))
+
+  (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
   )
 
 ;; * provide
