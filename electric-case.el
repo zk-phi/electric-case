@@ -153,7 +153,7 @@
 ;; 1.1.2 added ahk-mode settings
 ;; 1.1.3 added scala-mode settings, and refactord
 ;; 1.1.4 fixes and improvements
-;; 1.2.0 added pending-overlay
+;; 1.2.0 added pending-overlays
 
 ;;; Code:
 
@@ -250,11 +250,11 @@
     (forward-word)
     (skip-chars-forward "[:alnum:]-")))
 
-(defun electric-case-end-of-symbol-p ()
-  (and (= (save-excursion
-            (skip-chars-forward "[:alnum:]-" (1+ (point)))) 0)
-       (= (save-excursion
-            (skip-chars-backward "[:alnum:]-" (1- (point)))) -1)))
+(defun electric-case-out-of-symbol-p ()
+  (not (and (= (save-excursion
+                 (skip-chars-forward "[:alnum:]-" (1+ (point)))) 1)
+            (= (save-excursion
+                    (skip-chars-backward "[:alnum:]-" (1- (point)))) -1))))
 
 (defun electric-case-replace-buffer (beg end str)
     (let ((pos (point))
@@ -269,7 +269,7 @@
 (defun electric-case-convert-previous (n)
   (let* ((pos (point))
          (range (electric-case-range n)))
-    (when (and (electric-case-end-of-symbol-p) range)
+    (when (and (electric-case-out-of-symbol-p) range)
       (let* ((beg (car range))
              (end (cdr range))
              (type (apply electric-case-criteria (list beg end (1- n))))
@@ -316,16 +316,17 @@
 (defun electric-case-remove-overlays ()
   (save-restriction
     (widen)
-    (remove-overlays (point-min) (point-max) 'category 'electric-case)))
+    (remove-overlays nil nil 'category 'electric-case)))
 
 (defun electric-case-put-overlay (n)
   (let ((range (electric-case-range n)))
     (when range
       (let ((ov (make-overlay (car range) (cdr range))))
-        (overlay-put ov 'face '((t (:inherit shadow))))
+        (overlay-put ov 'face 'shadow)
         (overlay-put ov 'category 'electric-case)))))
 
-(defun electric-case-after-change-function (x xx xxx)
+(defun electric-case-after-change-function ()
+  (electric-case-remove-overlays)
   (when (and electric-case-mode
              electric-case-pending-overlay
              (eq 'self-insert-command (key-binding (this-single-command-keys))))
@@ -333,8 +334,7 @@
       (dotimes (n electric-case-max-iteration)
         (electric-case-put-overlay (- electric-case-max-iteration n))))))
 
-(run-with-idle-timer 0.8 t 'electric-case-remove-overlays)
-(add-hook 'after-change-functions 'electric-case-after-change-function)
+(add-hook 'post-command-hook 'electric-case-after-change-function)
 
 ;; * settings
 ;; ** utilities
