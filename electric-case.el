@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.2.1
+;; Version: 2.0.2
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -126,15 +126,16 @@
 ;; 1.1.2 added ahk-mode settings
 ;; 1.1.3 added scala-mode settings, and refactord
 ;; 1.1.4 fixes and improvements
-;; 1.2.0 added pending-overlays
-;; 1.2.1 added electric-case-trigger to post-command-hook
+;; 2.0.0 added pending-overlays
+;; 2.0.1 added electric-case-trigger to post-command-hook
 ;;       deleted variable "convert-calls"
+;; 2.0.2 minow fixes for criterias
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.2.1")
+(defconst electric-case-version "2.0.2")
 
 ;; * customs
 
@@ -280,6 +281,10 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
     (electric-case-replace-buffer beg (+ beg (length convstr)) str)
     val))
 
+(defun electric-case-this-line-string ()
+  (buffer-substring (save-excursion (beginning-of-line) (point))
+                    (save-excursion (end-of-line) (point))))
+
 ;; ** c-mode
 
 (defun electric-case-c-init ()
@@ -291,13 +296,16 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
         (lambda (b e n)
           (let ((proper (electric-case-possible-properties b e))
                 (key (key-description (this-single-command-keys))))
-            (cond ((member 'font-lock-variable-name-face proper)
-                   (if (member '(cpp-macro) (c-guess-basic-syntax))
-                       'usnake 'snake))
-                  ((member 'font-lock-function-name-face proper) 'snake)
-                  ((member 'font-lock-type-face proper) 'snake)
-                  ((= n 0) 'snake)
-                  (t nil)))))
+            (cond
+             ((member 'font-lock-variable-name-face proper)
+              ;; #ifdef A_MACRO  /  int variable_name;
+              (if (member '(cpp-macro) (c-guess-basic-syntax)) 'usnake 'snake))
+             ((member 'font-lock-string-face proper) nil)
+             ((member 'font-lock-comment-face proper) nil)
+             ((member 'font-lock-function-name-face proper) 'snake)
+             ((member 'font-lock-type-face proper) 'snake)
+             ((= n 0) 'snake)
+             (t nil)))))
 
   (defadvice electric-case-trigger (around electric-case-c-try-semi activate)
     (when (and electric-case-mode
@@ -322,13 +330,21 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
 
   (setq electric-case-criteria
         (lambda (b e n)
+          ;; do not convert primitives
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
-            (let ((proper (electric-case-possible-properties b e)))
-              (cond ((member 'font-lock-type-face proper) 'ucamel)
-                    ((member 'font-lock-function-name-face proper) 'camel)
-                    ((member 'font-lock-variable-name-face proper) 'camel)
-                    ((= n 0) 'camel)
-                    (t nil))))))
+            (let ((proper (electric-case-possible-properties b e))
+                  (str (electric-case-this-line-string)))
+              (cond
+               ((string-match "^import" str)
+                ;; import java.util.ArrayList;
+                (if (= (char-before) ?\;) 'ucamel nil))
+               ((member 'font-lock-string-face proper) nil)
+               ((member 'font-lock-comment-face proper) nil)
+               ((member 'font-lock-type-face proper) 'ucamel)
+               ((member 'font-lock-function-name-face proper) 'camel)
+               ((member 'font-lock-variable-name-face proper) 'camel)
+               ((= n 0) 'camel)
+               (t nil))))))
 
   (defadvice electric-case-trigger (around electric-case-java-try-semi activate)
     (when (and electric-case-mode
@@ -352,11 +368,14 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
         (lambda (b e n)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case-possible-properties b e)))
-              (cond ((member 'font-lock-type-face proper) 'ucamel)
-                    ((member 'font-lock-function-name-face proper) 'camel)
-                    ((member 'font-lock-variable-name-face proper) 'camel)
-                    ((= n 0) 'camel)
-                    (t nil))))))
+              (cond
+               ((member 'font-lock-string-face proper) nil)
+               ((member 'font-lock-comment-face proper) nil)
+               ((member 'font-lock-type-face proper) 'ucamel)
+               ((member 'font-lock-function-name-face proper) 'camel)
+               ((member 'font-lock-variable-name-face proper) 'camel)
+               ((= n 0) 'camel)
+               (t nil))))))
   )
 
 ;; ** ahk-mode
@@ -369,9 +388,12 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
   (setq electric-case-criteria
         (lambda (b e n)
           (let ((proper (electric-case-possible-properties b e)))
-            (cond ((member 'font-lock-keyword-face proper) 'ucamel)
-                  ((= n 0) 'camel)
-                  (t nil)))))
+            (cond
+             ((member 'font-lock-string-face proper) nil)
+             ((member 'font-lock-comment-face proper) nil)
+             ((member 'font-lock-keyword-face proper) 'ucamel)
+             ((= n 0) 'camel)
+             (t nil)))))
   )
 
 ;; * provide
