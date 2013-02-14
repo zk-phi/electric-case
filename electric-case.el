@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 1.2.0
+;; Version: 1.2.1
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -39,28 +39,15 @@
 ;;   public class TestClass{
 ;;       public void testMethod(void){
 ;;
-;; settings for some other languages are also available by default.
-
-;; Field reference, and method calls are not converted by default. But you may
-;; enable by evaluating code below:
-;;
-;;   (setq electric-case-convert-calls t)
-;;
-;; Now expression below
-;;
-;;   object-name.method-name();
-;;
-;; is comverted into
-;;
-;;   objectName.methodName();
-;;
 ;; To use UpperCamelCase, type something like:
 ;;
-;;   -long-name-class-example.static-method();
+;;   -long-name-class-example.a-static-method();
 ;;
 ;; then it is comverted into
 ;;
-;;   LongNameClassExample.staticMethod();
+;;   LongNameClassExample.aStaticMethod();
+;;
+;; settings for some other languages are also available by default.
 
 ;; If overlay is not confortable for you, evaluate following expression to disable.
 ;;
@@ -68,22 +55,8 @@
 
 ;; 2. Configuration
 
-;; There are three important buffer-local variables. To add settings for other
-;; languages, set these variables.
-
-;; - electric-case-mode-map
-;;
-;;   Bind keys that you want use as electric-case trigger. When triggered, 2 symbols
-;;   just before the cursor will be converted.
-;;
-;;     (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
-;;     (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
-;;     (define-key electric-case-mode-map (kbd ";") 'electric-case-trigger)
-;;     (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
-;;
-;;   Note that "electric-case-trigger" command will also call original command after
-;;   conversion. For example, even if (kbd "SPC") is bound to electric-case trigger,
-;;   still whitespace is inserted with (kbd "SPC").
+;; There are two important buffer-local variables. To add settings for other languages,
+;; set these variables.
 
 ;; - electric-case-criteria
 ;;
@@ -124,16 +97,16 @@
 ;;         what-is-this
 ;;     }
 ;;
-;;   But when ".bar();" is added, now "what-is-this" is a name of an object.
+;;   But when "object" is added, now "what-is-this" is a name of a class.
 ;;
 ;;     public void foo(void){
-;;         what-is-this.bar();
+;;         what-is-this object
 ;;     }
 ;;
 ;;   So electric-case can convert it.
 ;;
 ;;     public void foo(void){
-;;         whatIsThis.bar();
+;;         WhatIsThis object
 ;;     }
 ;;
 ;;   In the example above, the symbol "what-is-this" is checked twice. If
@@ -154,16 +127,16 @@
 ;; 1.1.3 added scala-mode settings, and refactord
 ;; 1.1.4 fixes and improvements
 ;; 1.2.0 added pending-overlays
+;; 1.2.1 added electric-case-trigger to post-command-hook
+;;       deleted variable "convert-calls"
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "1.2.0")
+(defconst electric-case-version "1.2.1")
 
 ;; * customs
-
-(defvar electric-case-convert-calls nil)
 
 (defvar electric-case-pending-overlay t)
 
@@ -176,55 +149,12 @@
 
 (defvar electric-case-criteria (lambda (b e n) 'camel))
 
-(defvar electric-case-mode-map
-  (let ((map (make-sparse-keymap)))
-    ;; commands
-    (define-key map (kbd "C-f") 'electric-case-trigger)
-    ;; delimiters
-    (define-key map (kbd "SPC") 'electric-case-trigger)
-    ;; parens
-    (define-key map (kbd "(") 'electric-case-trigger)
-    (define-key map (kbd ")") 'electric-case-trigger)
-    (define-key map (kbd "{") 'electric-case-trigger)
-    (define-key map (kbd "}") 'electric-case-trigger)
-    (define-key map (kbd "[") 'electric-case-trigger)
-    (define-key map (kbd "]") 'electric-case-trigger)
-    ;; separators
-    (define-key map (kbd ":") 'electric-case-trigger)
-    (define-key map (kbd ";") 'electric-case-trigger)
-    (define-key map (kbd ",") 'electric-case-trigger)
-    (define-key map (kbd ".") 'electric-case-trigger)
-    ;; binary operators (except for "-")
-    (define-key map (kbd "+") 'electric-case-trigger)
-    (define-key map (kbd "*") 'electric-case-trigger)
-    (define-key map (kbd "/") 'electric-case-trigger)
-    (define-key map (kbd "%") 'electric-case-trigger)
-    (define-key map (kbd "&") 'electric-case-trigger)
-    (define-key map (kbd "|") 'electric-case-trigger)
-    (define-key map (kbd "^") 'electric-case-trigger)
-    (define-key map (kbd "<") 'electric-case-trigger)
-    (define-key map (kbd ">") 'electric-case-trigger)
-    (define-key map (kbd "?") 'electric-case-trigger)
-    (define-key map (kbd "=") 'electric-case-trigger)
-    ;; others (possibly useful in some languages)
-    (define-key map (kbd "`") 'electric-case-trigger)
-    (define-key map (kbd "!") 'electric-case-trigger)
-    (define-key map (kbd "$") 'electric-case-trigger)
-    (define-key map (kbd "@") 'electric-case-trigger)
-    (define-key map (kbd "~") 'electric-case-trigger)
-    (define-key map (kbd "#") 'electric-case-trigger)
-    map))
-
 (make-variable-buffer-local 'electric-case-mode)
 (make-variable-buffer-local 'electric-case-criteria)
-(make-variable-buffer-local 'electric-case-mode-map)
 
 (when (not (assq 'electric-case-mode minor-mode-alist))
   (add-to-list 'minor-mode-alist
                '(electric-case-mode " Case")))
-
-(add-to-list 'minor-mode-map-alist
-             (cons 'electric-case-mode electric-case-mode-map))
 
 (defun electric-case-mode (&optional arg)
   "Toggle electric-case-mode"
@@ -237,6 +167,7 @@
 ;; ** utilities
 
 (defun electric-case-backward-symbol (&optional n)
+  "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
   (setq n (or n 1))
   (while (>= (setq n (1- n)) 0)
     (when (= (point) (point-min)) (error "beginning of buffer"))
@@ -251,12 +182,13 @@
     (skip-chars-forward "[:alnum:]-")))
 
 (defun electric-case-out-of-symbol-p ()
-  (not (and (= (save-excursion
-                 (skip-chars-forward "[:alnum:]-" (1+ (point)))) 1)
-            (= (save-excursion
-                    (skip-chars-backward "[:alnum:]-" (1- (point)))) -1))))
+  "a-symb|ol => nil   /   a-symbol;| => t"
+  (= (save-excursion
+       (skip-chars-backward "[:alnum:]-" (1- (point)))) 0))
 
 (defun electric-case-replace-buffer (beg end str)
+  "(replace 1 2 \"aa\")
+buffer-string   =>   aaffer-string"
     (let ((pos (point))
           (oldstr (buffer-substring beg end)))
       (kill-region beg end)
@@ -267,9 +199,11 @@
 ;; ** commands
 
 (defun electric-case-convert-previous (n)
+  "(progn (convert-previous 2) (convert-previous 1))
+a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymbol;|"
   (let* ((pos (point))
          (range (electric-case-range n)))
-    (when (and (electric-case-out-of-symbol-p) range)
+    (when range
       (let* ((beg (car range))
              (end (cdr range))
              (type (apply electric-case-criteria (list beg end (1- n))))
@@ -302,14 +236,12 @@
         nil))))
 
 (defun electric-case-trigger ()
-  (interactive)
-  (let (n)
-    (dotimes (n electric-case-max-iteration)
-      (electric-case-convert-previous (- electric-case-max-iteration n))))
-  ;; call original command
-  (when (interactive-p)
-    (let ((electric-case-mode nil))
-      (call-interactively (key-binding (this-single-command-keys))))))
+  (when (and electric-case-mode (electric-case-out-of-symbol-p))
+    (let (n)
+      (dotimes (n electric-case-max-iteration)
+        (electric-case-convert-previous (- electric-case-max-iteration n))))))
+
+(add-hook 'post-command-hook 'electric-case-trigger)
 
 ;; * overlay
 
@@ -325,16 +257,15 @@
         (overlay-put ov 'face 'shadow)
         (overlay-put ov 'category 'electric-case)))))
 
-(defun electric-case-after-change-function ()
-  (electric-case-remove-overlays)
-  (when (and electric-case-mode
-             electric-case-pending-overlay
-             (eq 'self-insert-command (key-binding (this-single-command-keys))))
-    (let (n)
-      (dotimes (n electric-case-max-iteration)
-        (electric-case-put-overlay (- electric-case-max-iteration n))))))
+(defun electric-case-update-overlay ()
+  (when (and electric-case-mode electric-case-pending-overlay)
+    (electric-case-remove-overlays)
+    (when (eq 'self-insert-command (key-binding (this-single-command-keys)))
+      (let (n)
+        (dotimes (n electric-case-max-iteration)
+          (electric-case-put-overlay (- electric-case-max-iteration n)))))))
 
-(add-hook 'post-command-hook 'electric-case-after-change-function)
+(add-hook 'post-command-hook 'electric-case-update-overlay)
 
 ;; * settings
 ;; ** utilities
@@ -349,18 +280,6 @@
     (electric-case-replace-buffer beg (+ beg (length convstr)) str)
     val))
 
-(defun electric-case-cc-semi ()
-    (interactive)
-    (insert ";")
-    (backward-char)
-    (electric-case-trigger)
-    (forward-char)
-    (delete-char -1)
-    ;; call original command
-    (when (interactive-p)
-      (let ((electric-case-mode nil))
-        (call-interactively (key-binding (this-single-command-keys))))))
-
 ;; ** c-mode
 
 (defun electric-case-c-init ()
@@ -372,15 +291,23 @@
         (lambda (b e n)
           (let ((proper (electric-case-possible-properties b e))
                 (key (key-description (this-single-command-keys))))
-            (cond ((member 'font-lock-function-name-face proper) 'snake)
-                  ((member 'font-lock-type-face proper) 'snake)
-                  ((member 'font-lock-variable-name-face proper)
+            (cond ((member 'font-lock-variable-name-face proper)
                    (if (member '(cpp-macro) (c-guess-basic-syntax))
                        'usnake 'snake))
-                  ((and electric-case-convert-calls (= n 0)) 'snake)
+                  ((member 'font-lock-function-name-face proper) 'snake)
+                  ((member 'font-lock-type-face proper) 'snake)
+                  ((= n 0) 'snake)
                   (t nil)))))
 
-  (define-key electric-case-mode-map (kbd ";") 'electric-case-cc-semi)
+  (defadvice electric-case-trigger (around electric-case-c-try-semi activate)
+    (when (and electric-case-mode
+               (eq major-mode 'c-mode))
+      (if (not (string= (key-description (this-single-command-keys)) ";"))
+          ad-do-it
+        (insert ";")
+        (backward-char)
+      ad-do-it
+      (delete-char 1))))
   )
 
 ;; ** java-mode
@@ -397,13 +324,21 @@
         (lambda (b e n)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case-possible-properties b e)))
-              (cond ((member 'font-lock-function-name-face proper) 'camel)
+              (cond ((member 'font-lock-type-face proper) 'ucamel)
+                    ((member 'font-lock-function-name-face proper) 'camel)
                     ((member 'font-lock-variable-name-face proper) 'camel)
-                    ((member 'font-lock-type-face proper) 'ucamel)
-                    ((and electric-case-convert-calls (= n 0)) 'camel)
+                    ((= n 0) 'camel)
                     (t nil))))))
 
-  (define-key electric-case-mode-map (kbd ";") 'electric-case-cc-semi)
+  (defadvice electric-case-trigger (around electric-case-java-try-semi activate)
+    (when (and electric-case-mode
+               (eq major-mode 'java-mode))
+      (if (not (string= (key-description (this-single-command-keys)) ";"))
+          ad-do-it
+        (insert ";")
+        (backward-char)
+        ad-do-it
+        (delete-char 1))))
   )
 
 ;; ** scala-mode
@@ -417,10 +352,10 @@
         (lambda (b e n)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case-possible-properties b e)))
-              (cond ((member 'font-lock-function-name-face proper) 'camel)
+              (cond ((member 'font-lock-type-face proper) 'ucamel)
+                    ((member 'font-lock-function-name-face proper) 'camel)
                     ((member 'font-lock-variable-name-face proper) 'camel)
-                    ((member 'font-lock-type-face proper) 'ucamel)
-                    ((and electric-case-convert-calls (= n 0)) 'camel)
+                    ((= n 0) 'camel)
                     (t nil))))))
   )
 
@@ -435,7 +370,7 @@
         (lambda (b e n)
           (let ((proper (electric-case-possible-properties b e)))
             (cond ((member 'font-lock-keyword-face proper) 'ucamel)
-                  ((and electric-case-convert-calls (= n 0)) 'camel)
+                  ((= n 0) 'camel)
                   (t nil)))))
   )
 
