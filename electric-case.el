@@ -27,6 +27,7 @@
 ;; For example, to try electric-case-mode in java-mode, put following expression
 ;; into your init file.
 ;;
+;;   (require 'electric-case)
 ;;   (add-hook 'java-mode-hook electric-case-java-init)
 ;;
 ;; Now, when you type following expression as usual in java-mode,
@@ -38,7 +39,11 @@
 ;;
 ;;   public class TestClass{
 ;;       public void testMethod(void){
+
+;; If overlay is not confortable for you, evaluate following expression to disable.
 ;;
+;;   (setq electric-case-pending-overlay nil)
+
 ;; To use UpperCamelCase, type something like:
 ;;
 ;;   -long-name-class-example.a-static-method();
@@ -46,17 +51,20 @@
 ;; then it is comverted into
 ;;
 ;;   LongNameClassExample.aStaticMethod();
-;;
-;; settings for some other languages are also available by default.
 
-;; If overlay is not confortable for you, evaluate following expression to disable.
+;; Settings for some other languages are also available by default. Try:
 ;;
-;;   (setq electric-case-pending-overlay nil)
+;;   (add-hook 'c-mode-hook electric-case-c-init)
+;;   (add-hook 'ahk-mode-hook electric-case-ahk-init)
+;;   (add-hook 'scala-mode-hook electric-case-scala-init)
+;;
+;; If you want to use electric-case-mode on other languages than above,
+;; you can make your own setting. Read description below.
 
 ;; 2. Configuration
 
 ;; There are two important buffer-local variables. To add settings for other languages,
-;; set these variables.
+;; customize these variables.
 
 ;; - electric-case-criteria
 ;;
@@ -78,40 +86,31 @@
 ;;                     (t nil)))))
 ;;
 ;;   with criteria above, function declarations and variable declarations are converted
-;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE.
+;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE. But other
+;;   expressions are not converted, even if that contain "-".
 ;;
-;;     int a-variable;  =>  int a_variable;
+;;     a = b-c;  =>  a = b-c; (NOT "a = b_c;")
 ;;
-;;     #define macro_name => #define MACRO_NAME
-;;
-;;   But other expressions are not converted, even if that contain "-".
-;;
-;;     a = b-c;  =>  a = b-c; (NOT "a = bC;")
+;;   This may be one of the minimal criterias for c/cpp.
 
 ;; - electric-case-max-iteration
 ;;
-;;   Set the maximum number of iteration. For example, in condition below, the syntactical
-;;   category of the symbol "what-is-this" is not decidable.
+;;   For example, in Java, the syntactical category of the symbol "what-is-this" below
+;;   is not decidable.
 ;;
-;;     public void foo(void){
-;;         what-is-this
-;;     }
+;;     what-is-this
 ;;
-;;   But when "object" is added, now "what-is-this" is a name of a class.
+;;   But when "symbol" is added, now "what-is-this" is a name of a class.
 ;;
-;;     public void foo(void){
-;;         what-is-this object
-;;     }
+;;     what-is-this symbol;
 ;;
 ;;   So electric-case can convert it.
 ;;
-;;     public void foo(void){
-;;         WhatIsThis object
-;;     }
+;;     WhatIsThis symbol;
 ;;
-;;   In the example above, the symbol "what-is-this" is checked twice. If
-;;   "electric-case-max-iteration" is 1, "what-is-this" is not checked more
-;;   than twice, so not converted.
+;;   In the example above, the symbol "what-is-this" must be checked twice. Therefore,
+;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this"
+;;   is not checked twice, and not be converted.
 
 ;;; Change Log:
 
