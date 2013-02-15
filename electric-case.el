@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.0.2
+;; Version: 2.0.3
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -40,10 +40,6 @@
 ;;   public class TestClass{
 ;;       public void testMethod(void){
 
-;; If overlay is not confortable for you, evaluate following expression to disable.
-;;
-;;   (setq electric-case-pending-overlay nil)
-
 ;; To use UpperCamelCase, type something like:
 ;;
 ;;   -long-name-class-example.a-static-method();
@@ -51,6 +47,19 @@
 ;; then it is comverted into
 ;;
 ;;   LongNameClassExample.aStaticMethod();
+
+;; If overlay is not confortable for you, evaluate following expression to disable.
+;;
+;;   (setq electric-case-pending-overlay nil)
+
+;; If you want to disable electric-case temporally, use command "M-x electric-case-mode"
+;; or evaluate expression below:
+;;
+;;   (electric-case-mode -1)
+;;
+;; To activate again, use the same command again, or evaluate expression below:
+;;
+;;   (electric-case-mode 1)
 
 ;; Settings for some other languages are also available by default. Try:
 ;;
@@ -63,8 +72,8 @@
 
 ;; 2. Configuration
 
-;; There are two important buffer-local variables. To add settings for other languages,
-;; customize these variables.
+;; There are three important buffer-local variables. To add settings for other languages,
+;; customize them.
 
 ;; - electric-case-criteria
 ;;
@@ -93,6 +102,20 @@
 ;;
 ;;   This may be one of the minimal criterias for c/cpp.
 
+;; - electric-case-mode-map
+;;
+;;   Bind keys that you want use as electric-case trigger. When triggered, 2 symbols
+;;   just before the cursor will be converted.
+;;
+;;     (define-key electric-case-mode-map (kbd "SPC") 'electric-case-trigger)
+;;     (define-key electric-case-mode-map (kbd "(") 'electric-case-trigger)
+;;     (define-key electric-case-mode-map (kbd ";") 'electric-case-trigger)
+;;     (define-key electric-case-mode-map (kbd ",") 'electric-case-trigger)
+;;
+;;   Note that "electric-case-trigger" command will also call original command after
+;;   conversion. For example, even if (kbd "SPC") is bound to electric-case trigger,
+;;   still whitespace is inserted with (kbd "SPC").
+
 ;; - electric-case-max-iteration
 ;;
 ;;   For example, in Java, the syntactical category of the symbol "what-is-this" below
@@ -112,6 +135,10 @@
 ;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this"
 ;;   is not checked twice, and not be converted.
 
+;;; Known Bugs:
+
+;; - conflicts with hl-paren
+
 ;;; Change Log:
 
 ;; 1.0.0 first released
@@ -129,12 +156,13 @@
 ;; 2.0.1 added electric-case-trigger to post-command-hook
 ;;       deleted variable "convert-calls"
 ;; 2.0.2 minow fixes for criterias
+;; 2.0.3 removed electric-case-trigger from post-command-hook
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "2.0.2")
+(defconst electric-case-version "2.0.3")
 
 ;; * customs
 
@@ -149,12 +177,55 @@
 
 (defvar electric-case-criteria (lambda (b e n) 'camel))
 
+(defvar electric-case-mode-map
+  (let ((map (make-sparse-keymap)))
+    ;; commands
+    (define-key map (kbd "C-f") 'electric-case-trigger)
+    ;; delimiters
+    (define-key map (kbd "SPC") 'electric-case-trigger)
+    ;; parens
+    (define-key map (kbd "(") 'electric-case-trigger)
+    (define-key map (kbd ")") 'electric-case-trigger)
+    (define-key map (kbd "{") 'electric-case-trigger)
+    (define-key map (kbd "}") 'electric-case-trigger)
+    (define-key map (kbd "[") 'electric-case-trigger)
+    (define-key map (kbd "]") 'electric-case-trigger)
+    ;; separators
+    (define-key map (kbd ":") 'electric-case-trigger)
+    (define-key map (kbd ";") 'electric-case-trigger)
+    (define-key map (kbd ",") 'electric-case-trigger)
+    (define-key map (kbd ".") 'electric-case-trigger)
+    ;; binary operators (except for "-")
+    (define-key map (kbd "+") 'electric-case-trigger)
+    (define-key map (kbd "*") 'electric-case-trigger)
+    (define-key map (kbd "/") 'electric-case-trigger)
+    (define-key map (kbd "%") 'electric-case-trigger)
+    (define-key map (kbd "&") 'electric-case-trigger)
+    (define-key map (kbd "|") 'electric-case-trigger)
+    (define-key map (kbd "^") 'electric-case-trigger)
+    (define-key map (kbd "<") 'electric-case-trigger)
+    (define-key map (kbd ">") 'electric-case-trigger)
+    (define-key map (kbd "?") 'electric-case-trigger)
+    (define-key map (kbd "=") 'electric-case-trigger)
+    ;; others (possibly useful in some languages)
+    (define-key map (kbd "`") 'electric-case-trigger)
+    (define-key map (kbd "!") 'electric-case-trigger)
+    (define-key map (kbd "$") 'electric-case-trigger)
+    (define-key map (kbd "@") 'electric-case-trigger)
+    (define-key map (kbd "~") 'electric-case-trigger)
+    (define-key map (kbd "#") 'electric-case-trigger)
+    map))
+
 (make-variable-buffer-local 'electric-case-mode)
 (make-variable-buffer-local 'electric-case-criteria)
+(make-variable-buffer-local 'electric-case-mode-map)
 
 (when (not (assq 'electric-case-mode minor-mode-alist))
   (add-to-list 'minor-mode-alist
                '(electric-case-mode " Case")))
+
+(add-to-list 'minor-mode-map-alist
+             (cons 'electric-case-mode electric-case-mode-map))
 
 (defun electric-case-mode (&optional arg)
   "Toggle electric-case-mode"
@@ -236,12 +307,14 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
         nil))))
 
 (defun electric-case-trigger ()
-  (when (and electric-case-mode (electric-case-out-of-symbol-p))
+  (interactive)
+  (when (electric-case-out-of-symbol-p)
     (let (n)
       (dotimes (n electric-case-max-iteration)
-        (electric-case-convert-previous (- electric-case-max-iteration n))))))
-
-(add-hook 'post-command-hook 'electric-case-trigger)
+        (electric-case-convert-previous (- electric-case-max-iteration n)))))
+  ;; call original command
+  (let ((electric-case-mode nil))
+    (call-interactively (key-binding (this-single-command-keys)))))
 
 ;; * overlay
 
