@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.0.4
+;; Version: 2.1.0
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -24,11 +24,15 @@
 
 ;; 1. Usage
 
+;; 1.A. Overview
+;;
 ;; For example, to try electric-case-mode in java-mode, put following expression
 ;; into your init file.
 ;;
 ;;   (require 'electric-case)
-;;   (add-hook 'java-mode-hook electric-case-java-init)
+;;
+;;   (eval-after-load "cc-mode"
+;;     (add-hook 'java-mode-hook electric-case-java-init))
 ;;
 ;; Now, when you type following expression as usual in java-mode,
 ;;
@@ -39,38 +43,85 @@
 ;;
 ;;   public class TestClass{
 ;;       public void testMethod(void){
+;;
+;; Settings for some other languages are also available by default. Try:
+;;
+;;   (eval-after-load "cc-mode"
+;;     (add-hook 'c-mode-hook electric-case-c-init))
+;;
+;;   (eval-after-load "ahk-mode"
+;;     (add-hook 'ahk-mode-hook electric-case-ahk-init))
+;;
+;;   (eval-after-load "scala-mode"
+;;     (add-hook 'scala-mode-hook electric-case-scala-init))
+;;
+;; If you want to use electric-case-mode on other languages than above,
+;; you may make your own setting. Read section 2.
 
-;; To use UpperCamelCase, type something like:
+;; 1.B. "convert-calls"
 ;;
-;;   -long-name-class-example.a-static-method();
+;; electric-case do not convert other expressions than declarations, by default. To
+;; enable conversion for other expressions, set "electric-case-convert-calls" non-nil.
 ;;
-;; then it is comverted into
+;;   (setq electric-case-convert-calls t)
 ;;
-;;   LongNameClassExample.aStaticMethod();
+;; This sometimes produces confusing results for novice users. For example,
+;;
+;;   -foo
+;;
+;; is not treated as "minus foo", but converted to
+;;
+;;   Foo
+;;
+;; This behavior is useful to call static methods.
+;;
+;;   -class-name.static-method  =>  ClassName.staticMethod()
+;;
+;; To make "-" treated as subtraction or negation, insert whitespace around it.
+;;
+;;   - foo
+;;
+;; I recommend to keep "electric-case-convert-calls" nil, because convert-calls may be
+;; too noisy. Once declared, symbols are easily inserted using auto completion, or abbrev.
+;; This script is useful when you TYPE camel-case or snake-case symbols. But in case you do
+;; not need to type, not to type is much better.
 
-;; If overlay is not confortable for you, evaluate following expression to disable.
+;; 1.C. "convert-nums"
+;;
+;; Even if "electric-case-convert-calls" is non-nil, still numbers are not converted.
+;;
+;;   1-foo  =>  1-foo
+;;
+;; To treat them as parts of symbols, set "electric-case-convert-nums" non-nil.
+;;
+;;   (setq electric-case-convert-nums t)
+;;
+;; Then numbers are also converted.
+;;
+;;   1-foo  =>  1Foo
+;;
+;; When "convert-nums" is kept nil, symbols that contain numbers are not converted, even if
+;; they are in declarations. If you use identifiers that include numbers, set this non-nil.
+
+;; 1.D. overlays
+;;
+;; Symbols that may be converted are printed in gray. If this is not confortable for you,
+;; evaluate following expression to disable it.
 ;;
 ;;   (setq electric-case-pending-overlay nil)
 
+;; 1.E. disable electric-case
+;;
 ;; If you want to disable electric-case temporally, use command "M-x electric-case-mode"
-;; or evaluate expression below:
+;; or evaluate expression below :
 ;;
 ;;   (electric-case-mode -1)
 ;;
-;; To activate again, use the same command again, or evaluate expression below:
+;; To activate again, use the same command again, or evaluate expression below :
 ;;
 ;;   (electric-case-mode 1)
 
-;; Settings for some other languages are also available by default. Try:
-;;
-;;   (add-hook 'c-mode-hook electric-case-c-init)
-;;   (add-hook 'ahk-mode-hook electric-case-ahk-init)
-;;   (add-hook 'scala-mode-hook electric-case-scala-init)
-;;
-;; If you want to use electric-case-mode on other languages than above,
-;; you can make your own setting. Read description below.
-
-;; 2. Configuration
+;; 2. Language Configuration
 
 ;; There are two important buffer-local variables. To add settings for other languages,
 ;; customize them.
@@ -78,10 +129,15 @@
 ;; - electric-case-criteria
 ;;
 ;;   Set a function that defines which case to convert the symbol into. The function
-;;   will be given 3 arguments: the beginning and end point of the symbol that is going
+;;   will be given 3 arguments : the beginning and end point of the symbol that is going
 ;;   to be converted, and number of symbols between this symbol and the cursor. The
 ;;   function must return one of 'camel, 'ucamel, 'snake, 'usnake, and nil. When the
-;;   return value is nil, the symbol will not be converted.
+;;   return value is nil, conversion for the symbol is canceled. You may assume, that
+;;   when "electric-case-convert-nums" is nil, symbols with numbers are never given.
+;;
+;;   Remember, that if "electric-case-convert-calls" is non-nil, symbols that are not
+;;   in declarations are also expected to be converted. So criteria function should not
+;;   return nil in that case.
 ;;
 ;;   Here is an example:
 ;;
@@ -92,11 +148,13 @@
 ;;                     ((member 'font-lock-variable-name-face proper)
 ;;                      (if (member '(cpp-macro) (c-guess-basic-syntax))
 ;;                          'usnake 'snake))
+;;                     (electric-case-convert-calls 'snake)
 ;;                     (t nil)))))
 ;;
 ;;   with criteria above, function declarations and variable declarations are converted
-;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE. But other
-;;   expressions are not converted, even if that contain "-".
+;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE. Other expressions
+;;   are converted into snake_case if "electric-case-convert-calls" is non-nil. Otherwise,
+;;   are not converted, even if that contain "-".
 ;;
 ;;     a = b-c;  =>  a = b-c; (NOT "a = b_c;")
 ;;
@@ -109,7 +167,7 @@
 ;;
 ;;     what-is-this
 ;;
-;;   But when "symbol" is added, now "what-is-this" is a name of a class.
+;;   But when "symbol;" is added, now "what-is-this" is a name of a class.
 ;;
 ;;     what-is-this symbol;
 ;;
@@ -118,12 +176,8 @@
 ;;     WhatIsThis symbol;
 ;;
 ;;   In the example above, the symbol "what-is-this" must be checked twice. Therefore,
-;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this"
-;;   is not checked twice, and not be converted.
-
-;;; Known Bugs:
-
-;; - conflicts with hl-paren
+;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this" is
+;;   not checked twice, and not be converted.
 
 ;;; Change Log:
 
@@ -144,6 +198,7 @@
 ;; 2.0.2 minow fixes for criterias
 ;; 2.0.3 removed electric-case-trigger from post-command-hook
 ;; 2.0.4 fixed trigger and added hook again
+;; 2.1.0 added 2 custom variables, minor fixes
 
 ;;; Code:
 
@@ -155,16 +210,18 @@
 
 (defvar electric-case-pending-overlay t)
 
+(defvar electric-case-convert-calls nil)
+(defvar electric-case-convert-nums nil)
+
 (defvar electric-case-max-iteration 2)
 (make-variable-buffer-local 'electric-case-max-iteration)
 
 ;; * mode variables
 
 (defvar electric-case-mode nil)
+(make-variable-buffer-local 'electric-case-mode)
 
 (defvar electric-case-criteria (lambda (b e n) 'camel))
-
-(make-variable-buffer-local 'electric-case-mode)
 (make-variable-buffer-local 'electric-case-criteria)
 
 (when (not (assq 'electric-case-mode minor-mode-alist))
@@ -188,7 +245,10 @@
   (while (>= (setq n (1- n)) 0)
     (when (= (point) (point-min)) (error "beginning of buffer"))
     (backward-word)
-    (skip-chars-backward "[:alnum:]-")))
+    (if electric-case-convert-nums
+        (skip-chars-backward "[:alnum:]-")
+      (skip-chars-backward "[:alpha:]-")
+      (when (= (char-after) ?-) (forward-char 1)))))
 
 (defun electric-case-forward-symbol (&optional n)
   (interactive)
@@ -196,7 +256,10 @@
   (while (>= (setq n (1- n)) 0)
     (when (= (point) (point-max)) (error "end of buffer"))
     (forward-word)
-    (skip-chars-forward "[:alnum:]-")))
+    (if electric-case-convert-nums
+        (skip-chars-forward "[:alnum:]-")
+      (skip-chars-forward "[:alpha:]-")
+      (when (= (char-before) ?-) (backward-char 1)))))
 
 (defun electric-case--out-of-symbol-p ()
   "a-symb|ol => nil   /   a-symbol;| => t"
@@ -322,9 +385,10 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
               (if (member '(cpp-macro) (c-guess-basic-syntax)) 'usnake 'snake))
              ((member 'font-lock-string-face proper) nil)
              ((member 'font-lock-comment-face proper) nil)
+             ((member 'font-lock-keyword-face proper) nil)
              ((member 'font-lock-function-name-face proper) 'snake)
              ((member 'font-lock-type-face proper) 'snake)
-             ((= n 0) 'snake)
+             ((and electric-case-convert-calls (= n 0)) 'snake)
              (t nil)))))
 
   (defadvice electric-case-trigger (around electric-case-c-try-semi activate)
@@ -360,10 +424,11 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
                 (if (= (char-before) ?\;) 'ucamel nil))
                ((member 'font-lock-string-face proper) nil)
                ((member 'font-lock-comment-face proper) nil)
+               ((member 'font-lock-keyword-face proper) nil)
                ((member 'font-lock-type-face proper) 'ucamel)
                ((member 'font-lock-function-name-face proper) 'camel)
                ((member 'font-lock-variable-name-face proper) 'camel)
-               ((= n 0) 'camel)
+               ((and electric-case-convert-calls (= n 0)) 'camel)
                (t nil))))))
 
   (defadvice electric-case-trigger (around electric-case-java-try-semi activate)
@@ -391,10 +456,11 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
               (cond
                ((member 'font-lock-string-face proper) nil)
                ((member 'font-lock-comment-face proper) nil)
+               ((member 'font-lock-keyword-face proper) nil)
                ((member 'font-lock-type-face proper) 'ucamel)
                ((member 'font-lock-function-name-face proper) 'camel)
                ((member 'font-lock-variable-name-face proper) 'camel)
-               ((= n 0) 'camel)
+               ((and electric-case-convert-calls (= n 0)) 'camel)
                (t nil))))))
   )
 
@@ -412,7 +478,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
              ((member 'font-lock-string-face proper) nil)
              ((member 'font-lock-comment-face proper) nil)
              ((member 'font-lock-keyword-face proper) 'ucamel)
-             ((= n 0) 'camel)
+             ((and electric-case-convert-calls (= n 0)) 'camel)
              (t nil)))))
   )
 
