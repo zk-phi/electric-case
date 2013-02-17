@@ -73,10 +73,6 @@
 ;;
 ;;   fooBar
 ;;
-;; This behavior is useful to call static methods.
-;;
-;;   -class-name.static-method  =>  ClassName.staticMethod()
-;;
 ;; To make "-" treated as subtraction or negation, insert whitespace around it.
 ;;
 ;;   foo - bar
