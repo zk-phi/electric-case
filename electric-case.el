@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.1.0
+;; Version: 2.1.1
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -67,11 +67,11 @@
 ;;
 ;; This sometimes produces confusing results for novice users. For example,
 ;;
-;;   -foo
+;;   foo-bar
 ;;
-;; is not treated as "minus foo", but converted to
+;; is not treated as "foo minus bar", but converted to
 ;;
-;;   Foo
+;;   fooBar
 ;;
 ;; This behavior is useful to call static methods.
 ;;
@@ -79,29 +79,32 @@
 ;;
 ;; To make "-" treated as subtraction or negation, insert whitespace around it.
 ;;
-;;   - foo
+;;   foo - bar
 ;;
 ;; I recommend to keep "electric-case-convert-calls" nil, because convert-calls may be
 ;; too noisy. Once declared, symbols are easily inserted using auto completion, or abbrev.
 ;; This script is useful when you TYPE camel-case or snake-case symbols. But in case you do
 ;; not need to type, not to type is much better.
 
-;; 1.C. "convert-nums"
+;; 1.C. "convert-nums", "convert-beginning", and "convert-end"
 ;;
-;; Even if "electric-case-convert-calls" is non-nil, still numbers are not converted.
+;; Even if "electric-case-convert-calls" is non-nil, numbers, hyphens at beginning/end of
+;; symbols are not converted.
 ;;
-;;   1-foo  =>  1-foo
+;;   -foo-1  =>  -foo-1
 ;;
-;; To treat them as parts of symbols, set "electric-case-convert-nums" non-nil.
+;; You may change this behavior by turning some of three variables to non-nil.
 ;;
-;;   (setq electric-case-convert-nums t)
+;;   (setq electric-case-convert-nums t)      numbers, and adjacent hyphens
+;;   (setq electric-case-convert-beginning t) hyphens at beginning of symbols
+;;   (setq electric-case-convert-end t)       hyphens at end of symbols
 ;;
-;; Then numbers are also converted.
-;;
-;;   1-foo  =>  1Foo
-;;
-;; When "convert-nums" is kept nil, symbols that contain numbers are not converted, even if
-;; they are in declarations. If you use identifiers that include numbers, set this non-nil.
+;;                                            num beg end
+;;                             -foo--1--bar-  nil nil nil
+;;                             -foo-1--bar    nil nil  t
+;;                             Foo--1-Bar-    nil  t  nil
+;;                             -foo1Bar-       t  nil nil
+;;                             Foo1Bar         t   t   t
 
 ;; 1.D. overlays
 ;;
@@ -199,19 +202,23 @@
 ;; 2.0.3 removed electric-case-trigger from post-command-hook
 ;; 2.0.4 fixed trigger and added hook again
 ;; 2.1.0 added 2 custom variables, minor fixes
+;; 2.1.1 added 2 custom variables
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "2.0.4")
+(defconst electric-case-version "2.1.1")
 
 ;; * customs
 
 (defvar electric-case-pending-overlay t)
 
 (defvar electric-case-convert-calls nil)
+
 (defvar electric-case-convert-nums nil)
+(defvar electric-case-convert-beginning nil)
+(defvar electric-case-convert-end nil)
 
 (defvar electric-case-max-iteration 2)
 (make-variable-buffer-local 'electric-case-max-iteration)
@@ -248,7 +255,9 @@
     (if electric-case-convert-nums
         (skip-chars-backward "[:alnum:]-")
       (skip-chars-backward "[:alpha:]-")
-      (when (= (char-after) ?-) (forward-char 1)))))
+      (when (= (char-after) ?-) (forward-char)))
+    (unless electric-case-convert-beginning
+      (skip-chars-forward "-"))))
 
 (defun electric-case-forward-symbol (&optional n)
   (interactive)
@@ -259,7 +268,9 @@
     (if electric-case-convert-nums
         (skip-chars-forward "[:alnum:]-")
       (skip-chars-forward "[:alpha:]-")
-      (when (= (char-before) ?-) (backward-char 1)))))
+      (when (= (char-before) ?-) (backward-char)))
+    (unless electric-case-convert-end
+      (skip-chars-backward "-"))))
 
 (defun electric-case--out-of-symbol-p ()
   "a-symb|ol => nil   /   a-symbol;| => t"
