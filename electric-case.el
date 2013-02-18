@@ -431,6 +431,8 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
                ((string-match "^import" str)
                 ;; import java.util.ArrayList;
                 (if (= (char-before) ?\;) 'ucamel nil))
+               ;; @Override
+               ((= (save-excursion (goto-char b) (char-after)) ?@) 'ucamel)
                ((member 'font-lock-string-face proper) nil)
                ((member 'font-lock-comment-face proper) nil)
                ((member 'font-lock-keyword-face proper) nil)
