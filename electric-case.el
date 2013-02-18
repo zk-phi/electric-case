@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.1.1
+;; Version: 2.2.0
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -43,7 +43,7 @@
 ;;
 ;;   public class TestClass{
 ;;       public void testMethod(void){
-;;
+
 ;; Settings for some other languages are also available by default. Try:
 ;;
 ;;   (eval-after-load "cc-mode"
@@ -128,15 +128,13 @@
 ;; - electric-case-criteria
 ;;
 ;;   Set a function that defines which case to convert the symbol into. The function
-;;   will be given 3 arguments : the beginning and end point of the symbol that is going
-;;   to be converted, and number of symbols between this symbol and the cursor. The
-;;   function must return one of 'camel, 'ucamel, 'snake, 'usnake, and nil. When the
-;;   return value is nil, conversion for the symbol is canceled. You may assume, that
-;;   when "electric-case-convert-nums" is nil, symbols with numbers are never given.
+;;   will be given 2 arguments : the beginning and end point of the symbol that is going
+;;   to be converted. The function must return one of 'camel, 'ucamel, 'snake, 'usnake,
+;;   and nil. When the return value is nil, conversion for the symbol is canceled.
 ;;
-;;   Remember, that if "electric-case-convert-calls" is non-nil, symbols that are not
-;;   in declarations are also expected to be converted. So criteria function should not
-;;   return nil in that case.
+;;   Remember, that if "electric-case-convert-calls" is nil, symbols that are not in
+;;   declarations are not expected to be converted. electric-case does not judge if the
+;;   symbol is in a declaration. So criteria function should return nil in that case.
 ;;
 ;;   Here is an example:
 ;;
@@ -199,6 +197,8 @@
 ;; 2.0.4 fixed trigger and added hook again
 ;; 2.1.0 added 2 custom variables, minor fixes
 ;; 2.1.1 added 2 custom variables
+;; 2.2.0 changed behavior
+;;       now only symbols overlayd are converted
 
 ;;; Code:
 
@@ -206,30 +206,10 @@
 
 (defconst electric-case-version "2.1.1")
 
-;; * customs
-
-(defvar electric-case-pending-overlay t)
-
-(defvar electric-case-convert-calls nil)
-
-(defvar electric-case-convert-nums nil)
-(defvar electric-case-convert-beginning nil)
-(defvar electric-case-convert-end nil)
-
-(defvar electric-case-max-iteration 2)
-(make-variable-buffer-local 'electric-case-max-iteration)
-
 ;; * mode variables
 
 (defvar electric-case-mode nil)
 (make-variable-buffer-local 'electric-case-mode)
-
-(defvar electric-case-criteria (lambda (b e n) 'camel))
-(make-variable-buffer-local 'electric-case-criteria)
-
-(when (not (assq 'electric-case-mode minor-mode-alist))
-  (add-to-list 'minor-mode-alist
-               '(electric-case-mode " Case")))
 
 (defun electric-case-mode (&optional arg)
   "Toggle electric-case-mode"
@@ -238,8 +218,28 @@
                                  ((> arg 0) t)
                                  (t nil))))
 
-;; * case conversion
-;; ** utilities
+(when (not (assq 'electric-case-mode minor-mode-alist))
+  (add-to-list 'minor-mode-alist
+               '(electric-case-mode " Case")))
+
+;; * custom variables
+
+(defvar electric-case-pending-overlay 'shadow)
+
+(defvar electric-case-convert-calls nil)
+(defvar electric-case-convert-nums nil)
+(defvar electric-case-convert-beginning nil)
+(defvar electric-case-convert-end nil)
+
+(defvar electric-case-criteria (lambda (b e) 'camel))
+(make-variable-buffer-local 'electric-case-criteria)
+
+(defvar electric-case-max-iteration 2)
+(make-variable-buffer-local 'electric-case-max-iteration)
+
+;; * utilities
+
+;; motion
 
 (defun electric-case-backward-symbol (&optional n)
   "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
@@ -268,10 +268,19 @@
     (unless electric-case-convert-end
       (skip-chars-backward "-"))))
 
-(defun electric-case--out-of-symbol-p ()
-  "a-symb|ol => nil   /   a-symbol;| => t"
-  (= (save-excursion
-       (skip-chars-backward "[:alnum:]-" (1- (point)))) 0))
+(defun electric-case--range (n)
+  (save-excursion
+    (let* ((pos (point))
+           (beg (condition-case err
+                    (progn (electric-case-backward-symbol n) (point))
+                  (error nil)))
+           (end (when beg
+                  (goto-char beg) (electric-case-forward-symbol) (point))))
+      (if (and end (<= end pos))
+          (cons beg end)
+        nil))))
+
+;; replace buffer
 
 (defun electric-case--replace-buffer (beg end str)
   "(replace 1 2 \"aa\")
@@ -286,76 +295,68 @@ buffer-string   =>   aaffer-string"
       (remove-overlays beg (+ beg newlen))
       (goto-char (+ pos (- newlen oldlen))))))
 
-;; ** commands
+;; overlay management
 
-(defun electric-case--convert-previous (n)
-  "(progn (convert-previous 2) (convert-previous 1))
-a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymbol;|"
-  (let ((pos (point))
-        (range (electric-case--range n)))
-    (when range
-      (let ((beg (car range))
-            (end (cdr range)))
-        (when (string-match "[a-z]" (buffer-substring-no-properties beg end))
-          (let* ((type (apply electric-case-criteria (list beg end (1- n))))
-                 (str (buffer-substring-no-properties beg end))
-                 (wlst (split-string str "-"))
-                 (convstr (case type
-                            ('ucamel (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
-                            ('camel (concat
-                                     (car wlst)
-                                     (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
-                            ('usnake (mapconcat '(lambda (w) (upcase w)) wlst "_"))
-                            ('snake (mapconcat 'identity wlst "_"))
-                            (t nil))))
-            (when convstr
-              (electric-case--replace-buffer beg end convstr))))))))
-
-(defun electric-case--range (n)
-  (save-excursion
-    (let* ((pos (point))
-           (beg (condition-case err
-                    (progn (electric-case-backward-symbol n) (point))
-                  (error nil)))
-           (end (when beg
-                  (goto-char beg) (electric-case-forward-symbol) (point))))
-      (if (and end (<= end pos))
-          (cons beg end)
-        nil))))
-
-(defun electric-case--post-command-function ()
-  (when (and electric-case-mode
-             (electric-case--out-of-symbol-p)
-             (not mark-active))
-    (let (n)
-      (dotimes (n electric-case-max-iteration)
-        (electric-case--convert-previous (- electric-case-max-iteration n))))))
-
-(add-hook 'post-command-hook 'electric-case--post-command-function)
-
-;; * overlay
-
-(defun electric-case--remove-overlays ()
-  (save-restriction
-    (widen)
-    (remove-overlays nil nil 'category 'electric-case)))
+(defvar electric-case--overlays nil)
+(make-variable-buffer-local 'electric-case--overlays)
 
 (defun electric-case--put-overlay (n)
   (let ((range (electric-case--range n)))
     (when range
       (let ((ov (make-overlay (car range) (cdr range))))
-        (overlay-put ov 'face 'shadow)
-        (overlay-put ov 'category 'electric-case)))))
+        (overlay-put ov 'face electric-case-pending-overlay)
+        (add-to-list 'electric-case--overlays ov)))))
 
-(defun electric-case--update-overlay ()
-  (when (and electric-case-mode electric-case-pending-overlay)
-    (electric-case--remove-overlays)
+(defun electric-case--remove-overlays ()
+  (interactive)
+  (mapc 'delete-overlay electric-case--overlays)
+  (setq electric-case--overlays nil))
+
+(defun electric-case--not-on-overlay-p ()
+  (let ((res t) (pos (point)))
+    (dolist (ov electric-case--overlays res)
+      (setq res (and res
+                     (or (< pos (overlay-start ov))
+                         (< (overlay-end ov) pos)))))))
+
+;; * commands
+
+(defun electric-case--convert-all ()
+  "(progn (convert-previous 2) (convert-previous 1))
+a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymbol;|"
+  (dolist (ov electric-case--overlays)
+    (let ((beg (overlay-start ov))
+          (end (overlay-end ov)))
+      (when (string-match "[a-z]" (buffer-substring-no-properties beg end))
+        (let* ((type (apply electric-case-criteria (list beg end)))
+               (str (buffer-substring-no-properties beg end))
+               (wlst (split-string str "-"))
+               (convstr (case type
+                          ('ucamel (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
+                          ('camel (concat
+                                   (car wlst)
+                                   (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
+                          ('usnake (mapconcat '(lambda (w) (upcase w)) wlst "_"))
+                          ('snake (mapconcat 'identity wlst "_"))
+                          (t nil))))
+          (when convstr
+            (electric-case--replace-buffer beg end convstr))))))
+  (electric-case--remove-overlays))
+
+(defun electric-case--post-command-function ()
+  (when electric-case-mode
+    ;; update overlay
     (when (eq 'self-insert-command (key-binding (this-single-command-keys)))
+      (electric-case--remove-overlays)
       (let (n)
         (dotimes (n electric-case-max-iteration)
-          (electric-case--put-overlay (- electric-case-max-iteration n)))))))
+          (electric-case--put-overlay (- electric-case-max-iteration n)))))
+    ;; electric-case trigger
+    (when (and (electric-case--not-on-overlay-p)
+               (not mark-active))
+      (electric-case--convert-all))))
 
-(add-hook 'post-command-hook 'electric-case--update-overlay)
+(add-hook 'post-command-hook 'electric-case--post-command-function)
 
 ;; * settings
 ;; ** utilities
@@ -366,6 +367,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
          (convstr (replace-regexp-in-string "-" "" str))
          (val (progn (electric-case--replace-buffer beg end convstr)
                      (font-lock-fontify-buffer)
+                     (sit-for 0)
                      (text-properties-at beg))))
     (electric-case--replace-buffer beg (+ beg (length convstr)) str)
     (font-lock-fontify-buffer)
@@ -383,7 +385,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
   (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
-        (lambda (b e n)
+        (lambda (b e)
           (let ((proper (electric-case--possible-properties b e))
                 (key (key-description (this-single-command-keys))))
             (cond
@@ -395,7 +397,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
              ((member 'font-lock-keyword-face proper) nil)
              ((member 'font-lock-function-name-face proper) 'snake)
              ((member 'font-lock-type-face proper) 'snake)
-             ((and electric-case-convert-calls (= n 0)) 'snake)
+             (electric-case-convert-calls 'snake)
              (t nil)))))
 
   (defadvice electric-case-trigger (around electric-case-c-try-semi activate)
@@ -420,7 +422,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
   (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
-        (lambda (b e n)
+        (lambda (b e)
           ;; do not convert primitives
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case--possible-properties b e))
@@ -435,7 +437,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
                ((member 'font-lock-type-face proper) 'ucamel)
                ((member 'font-lock-function-name-face proper) 'camel)
                ((member 'font-lock-variable-name-face proper) 'camel)
-               ((and electric-case-convert-calls (= n 0)) 'camel)
+               (electric-case-convert-calls 'camel)
                (t nil))))))
 
   (defadvice electric-case-trigger (around electric-case-java-try-semi activate)
@@ -457,7 +459,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
   (setq electric-case-max-iteration 2)
 
   (setq electric-case-criteria
-        (lambda (b e n)
+        (lambda (b e)
           (when (not (member (buffer-substring b e) electric-case-java-primitives))
             (let ((proper (electric-case--possible-properties b e)))
               (cond
@@ -467,7 +469,7 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
                ((member 'font-lock-type-face proper) 'ucamel)
                ((member 'font-lock-function-name-face proper) 'camel)
                ((member 'font-lock-variable-name-face proper) 'camel)
-               ((and electric-case-convert-calls (= n 0)) 'camel)
+               (electric-case-convert-calls 'camel)
                (t nil))))))
   )
 
@@ -479,13 +481,13 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
   (setq electric-case-max-iteration 1)
 
   (setq electric-case-criteria
-        (lambda (b e n)
+        (lambda (b e)
           (let ((proper (electric-case--possible-properties b e)))
             (cond
              ((member 'font-lock-string-face proper) nil)
              ((member 'font-lock-comment-face proper) nil)
              ((member 'font-lock-keyword-face proper) 'ucamel)
-             ((and electric-case-convert-calls (= n 0)) 'camel)
+             (electric-case-convert-calls 'camel)
              (t nil)))))
   )
 
