@@ -1,4 +1,4 @@
-;;; electric-case.el --- Electric case conversion.
+;;; electric-case.el --- insert camelCase, snake_case words without "Shift"ing
 
 ;; Copyright (C) 2013 zk_phi
 
@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.2.0
+;; Version: 2.2.1
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -78,29 +78,42 @@
 ;;   foo - bar
 ;;
 ;; I recommend to keep "electric-case-convert-calls" nil, because convert-calls may be
-;; too noisy. Once declared, symbols are easily inserted using auto completion, or abbrev.
-;; This script is useful when you TYPE camel-case or snake-case symbols. But in case you do
+;; too noisy. Once declared, symbols may be inserted easily using completion. This
+;; script is useful when you TYPE camel-case or snake-case symbols. But in case you do
 ;; not need to type, not to type is much better.
 
 ;; 1.C. "convert-nums", "convert-beginning", and "convert-end"
 ;;
-;; Even if "electric-case-convert-calls" is non-nil, numbers, hyphens at beginning/end of
+;; Even if "electric-case-convert-calls" is non-nil, numbers, and hyphens at beginning/end of
 ;; symbols are not converted.
 ;;
 ;;   -foo-1  =>  -foo-1
 ;;
 ;; You may change this behavior by turning some of three variables to non-nil.
 ;;
-;;   (setq electric-case-convert-nums t)      numbers, and adjacent hyphens
+;;   (setq electric-case-convert-nums t)      hyphens around numbers
 ;;   (setq electric-case-convert-beginning t) hyphens at beginning of symbols
 ;;   (setq electric-case-convert-end t)       hyphens at end of symbols
 ;;
-;;                                            num beg end
-;;                             -foo--1--bar-  nil nil nil
-;;                             -foo-1--bar    nil nil  t
-;;                             Foo--1-Bar-    nil  t  nil
-;;                             -foo1Bar-       t  nil nil
-;;                             Foo1Bar         t   t   t
+;; When you insert an expression "-foo--1--bar-",
+;;
+;;                   +---num
+;;                   |     +--- num
+;;                   V     V
+;;    -  f  o  o  -  -  1  -  -  b  a  r  -
+;;    ^           ^           ^           ^
+;;    |           +--- end    |           +--- end
+;;    +--- beginning          +--- beginning
+;;
+;; electric-case will convert it like:
+;;
+;;                      num beg end
+;;
+;;     -foo--1--bar-    nil nil nil
+;;     -foo-1--bar      nil nil  t
+;;     Foo--1-Bar-      nil  t  nil
+;;     -foo1Bar-         t  nil nil
+;;     Foo1Bar           t   t   t
 
 ;; 1.D. overlays
 ;;
@@ -108,6 +121,10 @@
 ;; evaluate following expression to disable it.
 ;;
 ;;   (setq electric-case-pending-overlay nil)
+;;
+;; Or you may also choose another face for overlay.
+;;
+;;   (setq electric-case-pending-overlay 'highlight)
 
 ;; 1.E. disable electric-case
 ;;
@@ -116,25 +133,25 @@
 ;;
 ;;   (electric-case-mode -1)
 ;;
-;; To activate again, use the same command again, or evaluate expression below :
+;; To activate again, call the same command again, or evaluate expression below :
 ;;
 ;;   (electric-case-mode 1)
 
 ;; 2. Language Configuration
 
 ;; There are two important buffer-local variables. To add settings for other languages,
-;; customize them.
+;; configure them.
 
 ;; - electric-case-criteria
 ;;
 ;;   Set a function that defines which case to convert the symbol into. The function
-;;   will be given 2 arguments : the beginning and end point of the symbol that is going
-;;   to be converted. The function must return one of 'camel, 'ucamel, 'snake, 'usnake,
-;;   and nil. When the return value is nil, conversion for the symbol is canceled.
+;;   will be given 2 arguments: the beginning and the end point of the symbol that is
+;;   going to be converted. The function must return one of 'camel, 'ucamel, 'snake,
+;;   'usnake, or nil. When the return value is nil, conversion for the symbol is canceled.
 ;;
-;;   Remember, that if "electric-case-convert-calls" is nil, symbols that are not in
-;;   declarations are not expected to be converted. electric-case does not judge if the
-;;   symbol is in a declaration. So criteria function should return nil in that case.
+;;   Remember, that if "electric-case-convert-calls" is nil, symbols not in declarations are
+;;   not expected to be converted. electric-case does not judge if the symbol is in a
+;;   declaration. So criteria function should return nil in that case.
 ;;
 ;;   Here is an example:
 ;;
@@ -150,12 +167,9 @@
 ;;
 ;;   with criteria above, function declarations and variable declarations are converted
 ;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE. Other expressions
-;;   are converted into snake_case if "electric-case-convert-calls" is non-nil. Otherwise,
-;;   are not converted, even if that contain "-".
-;;
-;;     a = b-c;  =>  a = b-c; (NOT "a = b_c;")
-;;
-;;   This may be one of the minimal criterias for c/cpp.
+;;   are converted into snake_case, if "electric-case-convert-calls" is non-nil. Otherwise,
+;;   are not converted, even if that contain "-". This may be one of the minimal criterias
+;;   for C-language.
 
 ;; - electric-case-max-iteration
 ;;
@@ -172,7 +186,7 @@
 ;;
 ;;     WhatIsThis symbol;
 ;;
-;;   In the example above, the symbol "what-is-this" must be checked twice. Therefore,
+;;   In the example above, the symbol "what-is-this" must be checked twice. Then,
 ;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this" is
 ;;   not checked twice, and not be converted.
 
@@ -199,17 +213,22 @@
 ;; 2.1.1 added 2 custom variables
 ;; 2.2.0 changed behavior
 ;;       now only symbols overlayd are converted
+;; 2.2.1 fixed bug that words without overlay may converted
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "2.1.1")
+(defconst electric-case-version "2.2.1")
 
 ;; * mode variables
 
 (defvar electric-case-mode nil)
 (make-variable-buffer-local 'electric-case-mode)
+
+(when (not (assq 'electric-case-mode minor-mode-alist))
+  (add-to-list 'minor-mode-alist
+               '(electric-case-mode " Case")))
 
 (defun electric-case-mode (&optional arg)
   "Toggle electric-case-mode"
@@ -217,10 +236,6 @@
   (setq electric-case-mode (cond ((null arg) (not electric-case-mode))
                                  ((> arg 0) t)
                                  (t nil))))
-
-(when (not (assq 'electric-case-mode minor-mode-alist))
-  (add-to-list 'minor-mode-alist
-               '(electric-case-mode " Case")))
 
 ;; * custom variables
 
@@ -255,19 +270,6 @@
     (unless electric-case-convert-beginning
       (skip-chars-forward "-"))))
 
-(defun electric-case-forward-symbol (&optional n)
-  (interactive)
-  (setq n (or n 1))
-  (while (>= (setq n (1- n)) 0)
-    (when (= (point) (point-max)) (error "end of buffer"))
-    (forward-word)
-    (if electric-case-convert-nums
-        (skip-chars-forward "[:alnum:]-")
-      (skip-chars-forward "[:alpha:]-")
-      (when (= (char-before) ?-) (backward-char)))
-    (unless electric-case-convert-end
-      (skip-chars-backward "-"))))
-
 (defun electric-case--range (n)
   (save-excursion
     (let* ((pos (point))
@@ -275,7 +277,13 @@
                     (progn (electric-case-backward-symbol n) (point))
                   (error nil)))
            (end (when beg
-                  (goto-char beg) (electric-case-forward-symbol) (point))))
+                  (goto-char beg)
+                  (if electric-case-convert-nums
+                      (skip-chars-forward "[:alnum:]-")
+                    (skip-chars-forward "[:alpha:]-"))
+                  (point))))
+      ;; inside-lo|ng-symbol  =>  nil
+      ;; b        p        e
       (if (and end (<= end pos))
           (cons beg end)
         nil))))
@@ -322,11 +330,10 @@ buffer-string   =>   aaffer-string"
 ;; * commands
 
 (defun electric-case--convert-all ()
-  "(progn (convert-previous 2) (convert-previous 1))
-a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymbol;|"
   (dolist (ov electric-case--overlays)
     (let ((beg (overlay-start ov))
           (end (overlay-end ov)))
+      ;; vvv i dont remember why i added whis line vvv
       (when (string-match "[a-z]" (buffer-substring-no-properties beg end))
         (let* ((type (apply electric-case-criteria (list beg end)))
                (str (buffer-substring-no-properties beg end))
@@ -346,7 +353,10 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
 (defun electric-case--post-command-function ()
   (when electric-case-mode
     ;; update overlay
-    (when (eq 'self-insert-command (key-binding (this-single-command-keys)))
+    (when (and (eq 'self-insert-command (key-binding (this-single-command-keys)))
+               (string-match
+                (if electric-case-convert-nums "[a-zA-Z0-9]" "[a-zA-Z]")
+                (char-to-string last-command-event)))
       (electric-case--remove-overlays)
       (let (n)
         (dotimes (n electric-case-max-iteration)
@@ -431,11 +441,11 @@ a-symbol another-symbol;|  =>  aSymbol another-symbol;|  =>  aSymbol anotherSymb
                ((string-match "^import" str)
                 ;; import java.util.ArrayList;
                 (if (= (char-before) ?\;) 'ucamel nil))
-               ;; @Override
+               ;; annotation
                ((save-excursion (goto-char b)
                                 (and (not (= (point) (point-min)))
                                      (= (char-before) ?@)))
-                'ucamel)
+                'camel)
                ((member 'font-lock-string-face proper) nil)
                ((member 'font-lock-comment-face proper) nil)
                ((member 'font-lock-keyword-face proper) nil)
