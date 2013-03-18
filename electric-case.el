@@ -16,7 +16,7 @@
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-;; Version: 2.2.1
+;; Version: 2.2.2
 ;; Author: zk_phi
 ;; URL: http://hins11.yu-yake.com/
 
@@ -214,12 +214,13 @@
 ;; 2.2.0 changed behavior
 ;;       now only symbols overlayd are converted
 ;; 2.2.1 fixed bug that words without overlay may converted
+;; 2.2.2 fixed bug that electric-case-convert-end is ignored
 
 ;;; Code:
 
 ;; * constants
 
-(defconst electric-case-version "2.2.1")
+(defconst electric-case-version "2.2.2")
 
 ;; * mode variables
 
@@ -281,6 +282,8 @@
                   (if electric-case-convert-nums
                       (skip-chars-forward "[:alnum:]-")
                     (skip-chars-forward "[:alpha:]-"))
+                  (unless electric-case-convert-end
+                    (skip-chars-backward "-"))
                   (point))))
       ;; inside-lo|ng-symbol  =>  nil
       ;; b        p        e
@@ -354,6 +357,7 @@ buffer-string   =>   aaffer-string"
   (when electric-case-mode
     ;; update overlay
     (when (and (eq 'self-insert-command (key-binding (this-single-command-keys)))
+               (characterp last-command-event)
                (string-match
                 (if electric-case-convert-nums "[a-zA-Z0-9]" "[a-zA-Z]")
                 (char-to-string last-command-event)))
