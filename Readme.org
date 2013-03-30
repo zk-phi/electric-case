@@ -12,43 +12,33 @@ insert camelCase and snake\_case words, without "Shift"ing
 
 Require this script
 
-#+begin_src emacs-lisp
-  (require 'electric-case)
-#+end_src
+: (require 'electric-case)
 
 and add initialize function to the major-mode hook.
 
-#+begin_src emacs-lisp
-  (eval-after-load "cc-mode"
-    '(add-hook 'java-mode-hook 'electric-case-java-init))
-#+end_src
+: (eval-after-load "cc-mode"
+:   '(add-hook 'java-mode-hook 'electric-case-java-init))
 
 Now you may type identifiers in lisp-like way,
 
-#+begin_src java
-  class class-name
-  {
-
-  }
-#+end_src
+: class class-name
+: {
+:
+: }
 
 and electric-case will fix it.
 
-#+begin_src java
-  class ClassName
-  {
-
-  }
-#+end_src
+: class ClassName
+: {
+:
+: }
 
 Settings for java, c, AHK, Scala are available by default.
 
-#+begin_src emacs-lisp
-  electric-case-c-init
-  electric-case-java-init
-  electric-case-ahk-init
-  electric-case-scala-init
-#+end_src
+: electric-case-c-init
+: electric-case-java-init
+: electric-case-ahk-init
+: electric-case-scala-init
 
 ** Configuration
 
@@ -58,9 +48,7 @@ electric-case only fixes declarations, by default. To enable
 electric-case for all occurrences of identifiers, set
 "electric-case-convert-calls" non-nil.
 
-#+begin_src emacs-lisp
-  (setq electric-case-convert-calls t)
-#+end_src
+: (setq electric-case-convert-calls t)
 
 This sometimes produces confusion results, and so is disabled by
 default. For example,
@@ -78,42 +66,32 @@ even when he meant subtraction.
 Regardless of "electric-case-convert-calls", hypens around numbers,
 and hyphens at beginning/end of identifiers are not fixed. That is,
 
-#+begin_src c
-  -foo;
-  foo-3-bar-4;
-  qux--;
-#+end_src
+: -foo;
+: foo-3-bar-4;
+: qux--;
 
 they are not fixed to
 
-#+begin_src c
-  Foo;
-  foo3Bar4;
-  qux;
-#+end_src
+: Foo;
+: foo3Bar4;
+: qux;
 
 You may change this behavior by setting following variables non-nil.
 
-#+begin_src emacs-lisp
-  electric-case-convert-beginning
-  electric-case-convert-nums
-  electric-case-convert-end
-#+end_src
+: electric-case-convert-beginning
+: electric-case-convert-nums
+: electric-case-convert-end
 
 *** electric-case-pending-overlay
 
 Identifiers that may be fixed are printed in gray. If this is not
 comfortable for you, set "electric-case-pending-overlay" nil.
 
-#+begin_src emacs-lisp
-  (setq electric-case-pending-overlay)
-#+end_src
+: (setq electric-case-pending-overlay)
 
 You may also choose another face for the overlay.
 
-#+begin_src emacs-lisp
-  (setq electric-case-pending-overlay 'highlight)
-#+end_src
+: (setq electric-case-pending-overlay 'highlight)
 
 ** Work with Other Languages
 
@@ -138,17 +116,15 @@ should return in that case.
 
 Here is an example for C-language.
 
-#+begin_src emacs-lisp
-  (setq electric-case-criteria
-        (lambda (b e n)
-          (let ((proper (text-properties-at b)))
-            (cond ((member 'font-lock-function-name-face proper) 'snake)
-                  ((member 'font-lock-variable-name-face proper)
-                   (if (member '(cpp-macro) (c-guess-basic-syntax))
-                       'usnake 'snake))
-                  (electric-case-convert-calls 'snake)
-                  (t nil)))))
-#+end_src
+: (setq electric-case-criteria
+:       (lambda (b e n)
+:         (let ((proper (text-properties-at b)))
+:           (cond ((member 'font-lock-function-name-face proper) 'snake)
+:                 ((member 'font-lock-variable-name-face proper)
+:                  (if (member '(cpp-macro) (c-guess-basic-syntax))
+:                      'usnake 'snake))
+:                 (electric-case-convert-calls 'snake)
+:                 (t nil)))))
 
 With criteria above, function declarations and variable declarations
 are converted into snake\_case. Macro declarations are converted into
@@ -159,21 +135,15 @@ UP\_SNAKE\_CASE.
 For example, in Java, the syntactical category of the symbl
 "what-is-this" below is not decidable.
 
-#+begin_src java
-  what-is-this
-#+end_src
+: what-is-this
 
 But when "symbol;" is added, now "what-is-this" is a name of a class.
 
-#+begin_src java
-  what-is-this symbol;
-#+end_src
+: what-is-this symbol;
 
 So electric-case can fix it into UpCamelCase.
 
-#+begin_src java
-  WhatIsThis symbol;
-#+end_src
+: WhatIsThis symbol;
 
 In the example above, the symbol "what-is-this" should be checked
 twice or more. Otherwise, "what-is-this" is not fixed. Then
