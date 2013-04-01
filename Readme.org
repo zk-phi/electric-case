@@ -1,8 +1,8 @@
 * electric-case.el
 
-camelCase、snake\_caseの識別子をShiftキーなしで入力
+camelCase、snake_caseの識別子をShiftキーなしで入力
 
-insert camelCase and snake\_case words, without "Shift"ing
+insert camelCase and snake_case words, without "Shift"ing
 
 ** Screencast
 
@@ -50,7 +50,7 @@ electric-case for all occurrences of identifiers, set
 
 : (setq electric-case-convert-calls t)
 
-This sometimes produces confusion results, and so is disabled by
+This sometimes produces confusing results, and so is disabled by
 default. For example,
 
 : foo-bar
@@ -61,7 +61,7 @@ this is always fixed to
 
 even when he meant subtraction.
 
-*** electric-case-convert-beginning/nums/end
+*** electric-case-convert-xxxx
 
 Regardless of "electric-case-convert-calls", hypens around numbers,
 and hyphens at beginning/end of identifiers are not fixed. That is,
@@ -84,7 +84,7 @@ You may change this behavior by setting following variables non-nil.
 
 *** electric-case-pending-overlay
 
-Identifiers that may be fixed are printed in gray. If this is not
+Identifiers that can be fixed are printed in gray. If this is not
 comfortable for you, set "electric-case-pending-overlay" nil.
 
 : (setq electric-case-pending-overlay)
@@ -104,10 +104,10 @@ variables in major-mode hooks.
 
 Set a function that defines which case to convert the identifier
 into. The function will be given two arguments: the beginning/end
-point of the identifier, that is going to be converted. The function
-must return one of camel (camelCase), ucamel (UpCamelCase), snake
-(snake\_case), usnake (UP\_SNAKE\_CASE) or nil. When the return value
-is nil, fix for the identifier is canceled.
+position of the identifier, that is going to be converted. The
+function must return one of camel (camelCase), ucamel (UpCamelCase),
+snake (snake_case), usnake (UP_SNAKE_CASE) or nil. When the return
+value is nil, fix for the identifier is canceled.
 
 Remember that if "electric-case-convert-calls" is nil, identifiers not
 in declarations are not expected to be converted. electric-case does
@@ -127,25 +127,34 @@ Here is an example for C-language.
 :                 (t nil)))))
 
 With criteria above, function declarations and variable declarations
-are converted into snake\_case. Macro declarations are converted into
-UP\_SNAKE\_CASE.
+are converted into snake_case. Macro declarations are converted into
+UP_SNAKE_CASE.
 
 *** electric-case-max-iteration
 
-For example, in Java, the syntactical category of the symbl
-"what-is-this" below is not decidable.
+For example, in Java, the syntactical category of the symbol
+"what-is-this" below is not decidable currently.
 
-: what-is-this
+: class MyClass{
+:     what-is-this
+: }
 
 But when "symbol;" is added, now "what-is-this" is a name of a class.
 
-: what-is-this symbol;
+: class MyClass{
+:     what-is-this symbol;
+: }
 
 So electric-case can fix it into UpCamelCase.
 
-: WhatIsThis symbol;
+: class MyClass{
+:     WhatIsThis symbol;
+: }
 
 In the example above, the symbol "what-is-this" should be checked
 twice or more. Otherwise, "what-is-this" is not fixed. Then
 "electric-case-max-iteration" should be 2 or greater.
 
+** Known Bugs and Limitations
+
+- In java, class names that end with "Class" are not fixed correctly
