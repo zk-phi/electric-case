@@ -32,7 +32,7 @@
 ;;   (require 'electric-case)
 ;;
 ;;   (eval-after-load "cc-mode"
-;;     (add-hook 'java-mode-hook electric-case-java-init))
+;;     (add-hook 'java-mode-hook 'electric-case-java-init))
 ;;
 ;; Now, when you type following expression as usual in java-mode,
 ;;
@@ -117,7 +117,7 @@
 
 ;; 1.D. overlays
 ;;
-;; Symbols that may be converted are printed in gray. If this is not confortable for you,
+;; Symbols that are going to converted are printed in gray. If this is not confortable for you,
 ;; evaluate following expression to disable it.
 ;;
 ;;   (setq electric-case-pending-overlay nil)
@@ -190,6 +190,10 @@
 ;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this" is
 ;;   not checked twice, and not be converted.
 
+;;; Bugs:
+
+;; - class name that ends with "Class" is treated as keyword "class"
+
 ;;; Change Log:
 
 ;; 1.0.0 first released
@@ -222,6 +226,32 @@
 
 (defconst electric-case-version "2.2.2")
 
+;; * customs
+
+(defgroup electric-case nil
+  "insert camelCase, snake_case words without \"Shift\"ing"
+  :group 'emacs)
+
+(defcustom electric-case-pending-overlay 'shadow
+  "face used to highlight pending symbols"
+  :group 'electric-case)
+
+(defcustom electric-case-convert-calls nil
+  "if not only definitions should be fixed"
+  :group 'electric-case)
+
+(defcustom electric-case-convert-nums nil
+  "if hyphens around numbers also should be fixed"
+  :group 'electric-case)
+
+(defcustom electric-case-convert-beginning nil
+  "if hyphens at beginning of symbols also should be fixed"
+  :group 'electric-case)
+
+(defcustom electric-case-convert-end nil
+  "if hyphens at end of symbols also should be fixed"
+  :group 'electric-case)
+
 ;; * mode variables
 
 (defvar electric-case-mode nil)
@@ -238,14 +268,7 @@
                                  ((> arg 0) t)
                                  (t nil))))
 
-;; * custom variables
-
-(defvar electric-case-pending-overlay 'shadow)
-
-(defvar electric-case-convert-calls nil)
-(defvar electric-case-convert-nums nil)
-(defvar electric-case-convert-beginning nil)
-(defvar electric-case-convert-end nil)
+;; * buffer-local variables
 
 (defvar electric-case-criteria (lambda (b e) 'camel))
 (make-variable-buffer-local 'electric-case-criteria)
@@ -254,8 +277,7 @@
 (make-variable-buffer-local 'electric-case-max-iteration)
 
 ;; * utilities
-
-;; motion
+;; ** motion
 
 (defun electric-case-backward-symbol (&optional n)
   "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
@@ -291,7 +313,7 @@
           (cons beg end)
         nil))))
 
-;; replace buffer
+;; ** replace buffer
 
 (defun electric-case--replace-buffer (beg end str)
   "(replace 1 2 \"aa\")
@@ -306,7 +328,7 @@ buffer-string   =>   aaffer-string"
       (remove-overlays beg (+ beg newlen))
       (goto-char (+ pos (- newlen oldlen))))))
 
-;; overlay management
+;; ** overlay management
 
 (defvar electric-case--overlays nil)
 (make-variable-buffer-local 'electric-case--overlays)
