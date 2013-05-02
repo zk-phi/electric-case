@@ -261,6 +261,7 @@
   (add-to-list 'minor-mode-alist
                '(electric-case-mode " Case")))
 
+;;;###autoload
 (defun electric-case-mode (&optional arg)
   "Toggle electric-case-mode"
   (interactive)
@@ -281,7 +282,6 @@
 
 (defun electric-case-backward-symbol (&optional n)
   "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
-  (interactive)
   (setq n (or n 1))
   (while (>= (setq n (1- n)) 0)
     (when (= (point) (point-min)) (error "beginning of buffer"))
@@ -341,7 +341,6 @@ buffer-string   =>   aaffer-string"
         (add-to-list 'electric-case--overlays ov)))))
 
 (defun electric-case--remove-overlays ()
-  (interactive)
   (mapc 'delete-overlay electric-case--overlays)
   (setq electric-case--overlays nil))
 
