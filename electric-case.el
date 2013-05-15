@@ -222,6 +222,8 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'cl))
+
 ;; * constants
 
 (defconst electric-case-version "2.2.2")
