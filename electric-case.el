@@ -256,20 +256,14 @@
 
 ;; * mode variables
 
-(defvar electric-case-mode nil)
-(make-variable-buffer-local 'electric-case-mode)
-
-(when (not (assq 'electric-case-mode minor-mode-alist))
-  (add-to-list 'minor-mode-alist
-               '(electric-case-mode " Case")))
-
-;;;###autoload
-(defun electric-case-mode (&optional arg)
-  "Toggle electric-case-mode"
-  (interactive)
-  (setq electric-case-mode (cond ((null arg) (not electric-case-mode))
-                                 ((> arg 0) t)
-                                 (t nil))))
+(define-minor-mode electric-case-mode
+  "insert camelCase, snake_case words without \"Shift\"ing"
+  :init-value nil
+  :lighter "eCase"
+  :global nil
+  (if electric-case-mode
+      (add-hook 'post-command-hook 'electric-case--post-command-function)
+    (remove-hook 'post-command-hook 'electric-case--post-command-function)))
 
 ;; * buffer-local variables
 
@@ -392,8 +386,6 @@ buffer-string   =>   aaffer-string"
     (when (and (electric-case--not-on-overlay-p)
                (not mark-active))
       (electric-case--convert-all))))
-
-(add-hook 'post-command-hook 'electric-case--post-command-function)
 
 ;; * settings
 ;; ** utilities
