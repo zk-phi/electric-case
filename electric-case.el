@@ -371,21 +371,20 @@ buffer-string   =>   aaffer-string"
   (electric-case--remove-overlays))
 
 (defun electric-case--post-command-function ()
-  (when electric-case-mode
-    ;; update overlay
-    (when (and (eq 'self-insert-command (key-binding (this-single-command-keys)))
-               (characterp last-command-event)
-               (string-match
-                (if electric-case-convert-nums "[a-zA-Z0-9]" "[a-zA-Z]")
-                (char-to-string last-command-event)))
-      (electric-case--remove-overlays)
-      (let (n)
-        (dotimes (n electric-case-max-iteration)
-          (electric-case--put-overlay (- electric-case-max-iteration n)))))
-    ;; electric-case trigger
-    (when (and (electric-case--not-on-overlay-p)
-               (not mark-active))
-      (electric-case--convert-all))))
+  ;; update overlay
+  (when (and (eq 'self-insert-command (key-binding (this-single-command-keys)))
+             (characterp last-command-event)
+             (string-match
+              (if electric-case-convert-nums "[a-zA-Z0-9]" "[a-zA-Z]")
+              (char-to-string last-command-event)))
+    (electric-case--remove-overlays)
+    (let (n)
+      (dotimes (n electric-case-max-iteration)
+        (electric-case--put-overlay (- electric-case-max-iteration n)))))
+  ;; electric-case trigger
+  (when (and (electric-case--not-on-overlay-p)
+             (not mark-active))
+    (electric-case--convert-all)))
 
 ;; * settings
 ;; ** utilities
