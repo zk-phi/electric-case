@@ -262,8 +262,8 @@
   :lighter "eCase"
   :global nil
   (if electric-case-mode
-      (add-hook 'post-command-hook 'electric-case--post-command-function)
-    (remove-hook 'post-command-hook 'electric-case--post-command-function)))
+      (add-hook 'post-command-hook 'electric-case--post-command-function nil t)
+    (remove-hook 'post-command-hook 'electric-case--post-command-function t)))
 
 ;; * buffer-local variables
 
