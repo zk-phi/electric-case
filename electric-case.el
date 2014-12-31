@@ -1,6 +1,6 @@
 ;;; electric-case.el --- insert camelCase, snake_case words without "Shift"ing
 
-;; Copyright (C) 2013 zk_phi
+;; Copyright (C) 2013-2015 zk_phi
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -359,11 +359,11 @@ buffer-string   =>   aaffer-string"
                (str (buffer-substring-no-properties beg end))
                (wlst (split-string str "-"))
                (convstr (case type
-                          ('ucamel (mapconcat '(lambda (w) (upcase-initials w)) wlst ""))
+                          ('ucamel (mapconcat (lambda (w) (upcase-initials w)) wlst ""))
                           ('camel (concat
                                    (car wlst)
-                                   (mapconcat '(lambda (w) (upcase-initials w)) (cdr wlst) "")))
-                          ('usnake (mapconcat '(lambda (w) (upcase w)) wlst "_"))
+                                   (mapconcat (lambda (w) (upcase-initials w)) (cdr wlst) "")))
+                          ('usnake (mapconcat (lambda (w) (upcase w)) wlst "_"))
                           ('snake (mapconcat 'identity wlst "_"))
                           (t nil))))
           (when convstr
