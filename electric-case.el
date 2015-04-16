@@ -26,15 +26,15 @@
 
 ;; 1.A. Overview
 ;;
-;; For example, to try electric-case-mode in java-mode, put following expression
-;; into your init file.
+;; For example, to enable electric-case-mode in java-mode, put
+;; following expression into your init file.
 ;;
 ;;   (require 'electric-case)
 ;;
 ;;   (eval-after-load "cc-mode"
 ;;     (add-hook 'java-mode-hook 'electric-case-java-init))
 ;;
-;; Now, when you type following expression as usual in java-mode,
+;; Now, when you type the following in java-mode,
 ;;
 ;;   public class test-class{
 ;;       public void test-method(void){
@@ -44,7 +44,8 @@
 ;;   public class TestClass{
 ;;       public void testMethod(void){
 
-;; Settings for some other languages are also available by default. Try:
+;; Preconfigured settings for some other languages are also
+;; provided. Try:
 ;;
 ;;   (eval-after-load "cc-mode"
 ;;     (add-hook 'c-mode-hook electric-case-c-init))
@@ -55,13 +56,13 @@
 ;;   (eval-after-load "scala-mode"
 ;;     (add-hook 'scala-mode-hook electric-case-scala-init))
 ;;
-;; If you want to use electric-case-mode on other languages than above,
-;; you may make your own setting. Read section 2.
+;; To add support for other languages, please read section 2.
 
 ;; 1.B. "convert-calls"
 ;;
-;; electric-case do not convert other expressions than declarations, by default. To
-;; enable conversion for other expressions, set "electric-case-convert-calls" non-nil.
+;; electric-case do not convert other expressions than declarations by
+;; default. To enable conversion for other expressions, set
+;; "electric-case-convert-calls" non-nil.
 ;;
 ;;   (setq electric-case-convert-calls t)
 ;;
@@ -69,23 +70,25 @@
 ;;
 ;;   foo-bar
 ;;
-;; is not treated as "foo minus bar", but converted to
+;; is not "foo minus bar", but is converted to
 ;;
 ;;   fooBar
 ;;
-;; To make "-" treated as subtraction or negation, insert whitespace around it.
+;; To make "-" counted as subtraction or negation, insert whitespace
+;; around it.
 ;;
 ;;   foo - bar
 ;;
-;; I recommend to keep "electric-case-convert-calls" nil, because convert-calls may be
-;; too noisy. Once declared, symbols may be inserted easily using completion. This
-;; script is useful when you TYPE camel-case or snake-case symbols. But in case you do
-;; not need to type, not to type is much better.
+;; I recommend to keep "electric-case-convert-calls" nil, because
+;; convert-calls is a kind of overkill. Once you declared a symbol,
+;; the symbol can be inserted easily using completion. This script is
+;; useful when you TYPE BY HAND camel-case or snake-case symbols. But
+;; in case you do not need to type, not to type is much better.
 
 ;; 1.C. "convert-nums", "convert-beginning", and "convert-end"
 ;;
-;; Even if "electric-case-convert-calls" is non-nil, numbers, and hyphens at beginning/end of
-;; symbols are not converted.
+;; Even if "electric-case-convert-calls" is non-nil, numbers and
+;; hyphens at beginning/end of symbols are not converted.
 ;;
 ;;   -foo-1  =>  -foo-1
 ;;
@@ -117,41 +120,45 @@
 
 ;; 1.D. overlays
 ;;
-;; Symbols that are going to converted are printed in gray. If this is not confortable for you,
-;; evaluate following expression to disable it.
+;; Symbols that can be converted by electric-case are shadowed by
+;; default. If this is not confortable for you, evaluate following
+;; expression to disable it.
 ;;
 ;;   (setq electric-case-pending-overlay nil)
 ;;
-;; Or you may also choose another face for overlay.
+;; Or you may also choose another face to highlight pending symbols.
 ;;
 ;;   (setq electric-case-pending-overlay 'highlight)
 
 ;; 1.E. disable electric-case
 ;;
-;; If you want to disable electric-case temporally, use command "M-x electric-case-mode"
-;; or evaluate expression below :
+;; If you want to disable electric-case temporally, use command "M-x
+;; electric-case-mode" or evaluate following expression:
 ;;
 ;;   (electric-case-mode -1)
 ;;
-;; To activate again, call the same command again, or evaluate expression below :
+;; To activate again, call the same command again, or evaluate
+;; following expression :
 ;;
 ;;   (electric-case-mode 1)
 
-;; 2. Language Configuration
+;; 2. Implementing Language Supports
 
-;; There are two important buffer-local variables. To add settings for other languages,
-;; configure them.
+;; There are two important buffer-local variables:
 
 ;; - electric-case-criteria
 ;;
-;;   Set a function that defines which case to convert the symbol into. The function
-;;   will be given 2 arguments: the beginning and the end point of the symbol that is
-;;   going to be converted. The function must return one of 'camel, 'ucamel, 'snake,
-;;   'usnake, or nil. When the return value is nil, conversion for the symbol is canceled.
+;;   A function that defines which case to convert the symbol
+;;   into. The function will be given 2 arguments: the beginning and
+;;   the end point of the symbol that may be converted. The function
+;;   must return one of 'camel, 'ucamel, 'snake, 'usnake, or nil. When
+;;   the return value is nil, conversion for the symbol is canceled.
 ;;
-;;   Remember, that if "electric-case-convert-calls" is nil, symbols not in declarations are
-;;   not expected to be converted. electric-case does not judge if the symbol is in a
-;;   declaration. So criteria function should return nil in that case.
+;;   Remember, that if "electric-case-convert-calls" is nil, symbols
+;;   not in declarations are not expected to be
+;;   converted. electric-case does not know that the symbol is not in
+;;   a declaration, so criteria function should return nil in that
+;;   case.
 ;;
 ;;   Here is an example:
 ;;
@@ -165,20 +172,21 @@
 ;;                     (electric-case-convert-calls 'snake)
 ;;                     (t nil)))))
 ;;
-;;   with criteria above, function declarations and variable declarations are converted
-;;   into snake_case. Macro declarations are converted into UP_SNAKE_CASE. Other expressions
-;;   are converted into snake_case, if "electric-case-convert-calls" is non-nil. Otherwise,
-;;   are not converted, even if that contain "-". This may be one of the minimal criterias
-;;   for C-language.
+;;   With the criteria function above, function declarations and
+;;   variable declarations are converted into snake_case. Macro
+;;   declarations are converted into UP_SNAKE_CASE. Other expressions
+;;   are converted into snake_case, if "electric-case-convert-calls"
+;;   is non-nil. Other symbols are not converted. This may be one of
+;;   the minimal criteria function for C-like language.
 
 ;; - electric-case-max-iteration
 ;;
-;;   For example, in Java, the syntactical category of the symbol "what-is-this" below
-;;   is not decidable.
+;;   For example, in Java, the syntactic category of the symbol
+;;   "what-is-this" below is not decidable.
 ;;
 ;;     what-is-this
 ;;
-;;   But when "symbol;" is added, now "what-is-this" is a name of a class.
+;;   But when " symbol;" is added, now "what-is-this" is a class name.
 ;;
 ;;     what-is-this symbol;
 ;;
@@ -186,11 +194,12 @@
 ;;
 ;;     WhatIsThis symbol;
 ;;
-;;   In the example above, the symbol "what-is-this" must be checked twice. Then,
-;;   "electric-case-max-iteration" must be 2 or greater. Otherwise, "what-is-this" is
-;;   not checked twice, and not be converted.
+;;   In this example, the symbol "what-is-this" must be checked
+;;   twice. So, "electric-case-max-iteration" for Java must be 2 or
+;;   greater. Otherwise, "what-is-this" is not checked twice, and is
+;;   not converted.
 
-;;; Bugs:
+;;; Known Bugs:
 
 ;; - class name that ends with "Class" is treated as keyword "class"
 
