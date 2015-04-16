@@ -288,7 +288,7 @@ as a part of the symbol."
 ;; * utilities
 ;; ** motion
 
-(defun electric-case-backward-symbol (&optional n)
+(defun electric-case--backward-symbol (&optional n)
   "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
   (setq n (or n 1))
   (while (>= (setq n (1- n)) 0)
@@ -304,9 +304,9 @@ as a part of the symbol."
 (defun electric-case--range (n)
   (save-excursion
     (let* ((pos (point))
-           (beg (condition-case err
-                    (progn (electric-case-backward-symbol n) (point))
-                  (error nil)))
+           (beg (ignore-errors
+                  (electric-case--backward-symbol n)
+                  (point)))
            (end (when beg
                   (goto-char beg)
                   (if electric-case-convert-nums
@@ -317,9 +317,8 @@ as a part of the symbol."
                   (point))))
       ;; inside-lo|ng-symbol  =>  nil
       ;; b        p        e
-      (if (and end (<= end pos))
-          (cons beg end)
-        nil))))
+      (when (and end (<= end pos))
+        (cons beg end)))))
 
 ;; ** replace buffer
 
