@@ -288,23 +288,18 @@ as a part of the symbol."
 ;; * utilities
 ;; ** motion
 
-(defun electric-case--backward-symbol (&optional n)
-  "an-electric-case-pending-word;|   =>   |an-electric-case-pending-word;"
-  (setq n (or n 1))
-  (while (>= (setq n (1- n)) 0)
-    (when (= (point) (point-min)) (error "beginning of buffer"))
-    (backward-word)
-    (if electric-case-convert-nums
-        (skip-chars-backward "[:alnum:]-")
-      (skip-chars-backward "[:alpha:]-"))
-    (unless electric-case-convert-beginning
-      (skip-chars-forward "-"))))
-
 (defun electric-case--range (n)
   (save-excursion
     (let* ((pos (point))
            (beg (ignore-errors
-                  (electric-case--backward-symbol n)
+                  (dotimes (_ n)
+                    (when (bobp) (error "beginning of buffer"))
+                    (backward-word)
+                    (if electric-case-convert-nums
+                        (skip-chars-backward "[:alnum:]-")
+                      (skip-chars-backward "[:alpha:]-"))
+                    (unless electric-case-convert-beginning
+                      (skip-chars-forward "-")))
                   (point)))
            (end (when beg
                   (goto-char beg)
