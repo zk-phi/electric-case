@@ -296,8 +296,7 @@ as a part of the symbol."
     (backward-word)
     (if electric-case-convert-nums
         (skip-chars-backward "[:alnum:]-")
-      (skip-chars-backward "[:alpha:]-")
-      (when (= (char-after) ?-) (forward-char)))
+      (skip-chars-backward "[:alpha:]-"))
     (unless electric-case-convert-beginning
       (skip-chars-forward "-"))))
 
