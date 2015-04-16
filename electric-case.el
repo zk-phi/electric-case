@@ -240,27 +240,30 @@
 ;; * customs
 
 (defgroup electric-case nil
-  "insert camelCase, snake_case words without \"Shift\"ing"
+  "Insert camelCase, snake_case words without \"Shift\"ing"
   :group 'emacs)
 
 (defcustom electric-case-pending-overlay 'shadow
-  "face used to highlight pending symbols"
+  "Face used to highlight pending symbols"
   :group 'electric-case)
 
 (defcustom electric-case-convert-calls nil
-  "if not only definitions should be fixed"
+  "When nil, only declarations are converted."
   :group 'electric-case)
 
 (defcustom electric-case-convert-nums nil
-  "if hyphens around numbers also should be fixed"
+  "When non-nil, hyphens around numbers are also counted as a
+part of the symbol."
   :group 'electric-case)
 
 (defcustom electric-case-convert-beginning nil
-  "if hyphens at beginning of symbols also should be fixed"
+  "When non-nil, hyphens at the beginning of symbols are also
+counted as a part of the symbol."
   :group 'electric-case)
 
 (defcustom electric-case-convert-end nil
-  "if hyphens at end of symbols also should be fixed"
+  "When non-nil, hyphens at the end of symbols are also counted
+as a part of the symbol."
   :group 'electric-case)
 
 ;; * mode variables
@@ -279,7 +282,7 @@
 (defvar electric-case-criteria (lambda (b e) 'camel))
 (make-variable-buffer-local 'electric-case-criteria)
 
-(defvar electric-case-max-iteration 2)
+(defvar electric-case-max-iteration 1)
 (make-variable-buffer-local 'electric-case-max-iteration)
 
 ;; * utilities
