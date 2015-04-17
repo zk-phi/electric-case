@@ -1,6 +1,6 @@
 * electric-case.el
 
-camelCase、snake_caseの識別子をShiftキーなしで入力
+camelCase、snake_case の識別子を Shift キーなしで入力
 
 insert camelCase and snake_case words, without "Shift"ing
 
@@ -10,151 +10,165 @@ insert camelCase and snake_case words, without "Shift"ing
 
 ** Installation
 
-Require this script
+Load this script
 
 : (require 'electric-case)
 
-and add initialize function to the major-mode hook.
+and initialize in major-mode hooks.
 
-: (eval-after-load "cc-mode"
-:   '(add-hook 'java-mode-hook 'electric-case-java-init))
+: (add-hook 'java-mode-hook 'electric-case-java-init)
 
-Now you may type identifiers in lisp-like way,
+And when you type the following in java-mode for example,
 
-: class class-name
-: {
-:
-: }
+: public class test-class{
+:     public void test-method(void){
 
-and electric-case will fix it.
+=electric-case= automatically converts it into :
 
-: class ClassName
-: {
-:
-: }
+: public class TestClass{
+:     public void testMethod(void){
 
-Settings for java, c, AHK, Scala are available by default.
+Preconfigured settings for some other languages are also
+provided. Try:
 
-: electric-case-c-init
-: electric-case-java-init
-: electric-case-ahk-init
-: electric-case-scala-init
+: (add-hook 'c-mode-hook electric-case-c-init)
+: (add-hook 'ahk-mode-hook electric-case-ahk-init)
+: (add-hook 'scala-mode-hook electric-case-scala-init)
 
-** Configuration
+To add support for other languages, please read section 2.
 
-*** electric-case-convert-calls
+** Customization
+*** =electric-case-convert-calls=
 
-electric-case only fixes declarations, by default. To enable
-electric-case for all occurrences of identifiers, set
-"electric-case-convert-calls" non-nil.
+=electric-case= do not convert other expressions than declarations by
+default. To enable conversion for other expressions, set
+=electric-case-convert-calls= non-nil.
 
 : (setq electric-case-convert-calls t)
 
-This sometimes produces confusing results, and so is disabled by
-default. For example,
+This sometimes produces confusing results for novice users. For
+example,
 
 : foo-bar
 
-this is always fixed to
+does not mean "foo minus bar", but is converted to
 
 : fooBar
 
-even when he meant subtraction.
+To make "-" counted as a subtraction or negation, insert whitespace
+around it.
 
-*** electric-case-convert-xxxx
+: foo - bar
 
-Regardless of "electric-case-convert-calls", hypens around numbers,
-and hyphens at beginning/end of identifiers are not fixed. That is,
+I recommend to keep =electric-case-convert-calls= =nil=, because it is
+a kind of overkill. Once you declared a symbol, the symbol can be
+inserted easily using completion. This script is useful when you TYPE
+BY HAND camel-case or snake-case symbols. But in case you do not need
+to type, not to type seems much better.
 
-: -foo;
-: foo-3-bar-4;
-: qux--;
+*** =electric-case-convert-nums/beginning/end=
 
-they are not fixed to
+Even if =electric-case-convert-calls= is non-nil, numbers and hyphens
+at beginning/end of symbols are not converted.
 
-: Foo;
-: foo3Bar4;
-: qux;
+: -foo-1  =>  -foo-1
 
-You may change this behavior by setting following variables non-nil.
+You may change this behavior by setting some of three variables to
+non-nil.
 
-: electric-case-convert-beginning
-: electric-case-convert-nums
-: electric-case-convert-end
+: (setq electric-case-convert-nums t)      hyphens around numbers
+: (setq electric-case-convert-beginning t) hyphens at beginning of symbols
+: (setq electric-case-convert-end t)       hyphens at end of symbols
 
-*** electric-case-pending-overlay
+When you insert an expression "-foo--1--bar-",
 
-Identifiers that can be fixed are printed in gray. If this is not
-comfortable for you, set "electric-case-pending-overlay" nil.
+:                 +---num
+:                 |     +--- num
+:                 V     V
+:  -  f  o  o  -  -  1  -  -  b  a  r  -
+:  ^           ^           ^           ^
+:  |           +--- end    |           +--- end
+:  +--- beginning          +--- beginning
 
-: (setq electric-case-pending-overlay)
+electric-case will convert as follows:
 
-You may also choose another face for the overlay.
+| num | beg | end | result       |
+|-----+-----+-----+--------------|
+| nil | nil | nil | -foo--1--bar-|
+| nil | nil | t   | -foo-1--bar  |
+| nil | t   | nil | Foo--1-Bar-  |
+| t   | nil | nil | -foo1Bar-    |
+| t   | t   | t   | Foo1Bar      |
+
+*** Overlays
+
+Symbols that may be converted by =electric-case= are shadowed by
+default. If this is not confortable for you, evaluate following
+expression to disable it.
+
+: (setq electric-case-pending-overlay nil)
+
+Or you may also choose another face to highlight pending symbols, that
+looks better in your colorscheme.
 
 : (setq electric-case-pending-overlay 'highlight)
 
-** Work with Other Languages
+** Implementing Language Supports
 
-Initializing functions (electric-case-xxx-init) actually do set two
-variables, and turn electric-case-mode on. If you want to use
-electric-case in other languages, you should configure these two
-variables in major-mode hooks.
+There are two important buffer-local variables:
 
-*** electric-case-criteria
+- =electric-case-criteria=
 
-Set a function that defines which case to convert the identifier
-into. The function will be given two arguments: the beginning/end
-position of the identifier, that is going to be converted. The
-function must return one of camel (camelCase), ucamel (UpCamelCase),
-snake (snake_case), usnake (UP_SNAKE_CASE) or nil. When the return
-value is nil, fix for the identifier is canceled.
+  A function that defines which case to convert the symbol into. The
+  function will be given 2 arguments: the beginning and the end point
+  of the symbol. The function must return one of =camel=, =ucamel=,
+  =snake=, =usnake=, or =nil=. When the return value is =nil=, the
+  symbol is not converted.
 
-Remember that if "electric-case-convert-calls" is nil, identifiers not
-in declarations are not expected to be converted. electric-case does
-not judge if the identifier is in a declaration. So criteria function
-should return in that case.
+  Remember, that if =electric-case-convert-calls= is =nil=, symbols
+  not in declarations are not expected to be
+  converted. =electric-case= does not know whether the symbol is in a
+  declaration or not, so criteria functions must be aware of it.
 
-Here is an example for C-language.
+  Here is an example:
 
-: (setq electric-case-criteria
-:       (lambda (b e n)
-:         (let ((proper (text-properties-at b)))
-:           (cond ((member 'font-lock-function-name-face proper) 'snake)
-:                 ((member 'font-lock-variable-name-face proper)
-:                  (if (member '(cpp-macro) (c-guess-basic-syntax))
-:                      'usnake 'snake))
-:                 (electric-case-convert-calls 'snake)
-:                 (t nil)))))
+  : (setq electric-case-criteria
+  :       (lambda (b e n)
+  :         (let ((proper (text-properties-at b)))
+  :           (cond ((member 'font-lock-function-name-face proper) 'snake)
+  :                 ((member 'font-lock-variable-name-face proper)
+  :                  (if (member '(cpp-macro) (c-guess-basic-syntax))
+  :                      'usnake 'snake))
+  :                 (electric-case-convert-calls 'snake)
+  :                 (t nil)))))
 
-With criteria above, function declarations and variable declarations
-are converted into snake_case. Macro declarations are converted into
-UP_SNAKE_CASE.
+  With the criteria function above, function-declarations and
+  variable-declarations are converted into snake_case. Macro
+  declarations are converted into UP_SNAKE_CASE. Other symbols are
+  converted into snake_case, if and only if
+  =electric-case-convert-calls= is non-nil. This may be one of the
+  minimal criteria functions for C-like language.
 
-*** electric-case-max-iteration
+- =electric-case-max-iteration=
 
-For example, in Java, the syntactical category of the symbol
-"what-is-this" below is not decidable currently.
+  For example, in Java, the syntactic category of the symbol
+  "what-is-this" below is not decidable.
 
-: class MyClass{
-:     what-is-this
-: }
+  : what-is-this
 
-But when "symbol;" is added, now "what-is-this" is a name of a class.
+  But when " symbol;" is added, now "what-is-this" is a class name.
 
-: class MyClass{
-:     what-is-this symbol;
-: }
+  : what-is-this symbol;
 
-So electric-case can fix it into UpCamelCase.
+  So electric-case can convert it.
 
-: class MyClass{
-:     WhatIsThis symbol;
-: }
+  : WhatIsThis symbol;
 
-In the example above, the symbol "what-is-this" should be checked
-twice or more. Otherwise, "what-is-this" is not fixed. Then
-"electric-case-max-iteration" should be 2 or greater.
+  In this example, the symbol "what-is-this" must be checked
+  twice. So, =electric-case-max-iteration= for Java must be 2 or
+  greater. Otherwise, "what-is-this" is not checked twice, and is not
+  converted.
 
-** Known Bugs and Limitations
+** Known Bugs:
 
-- In java, class names that end with "Class" are not fixed correctly
+- class name that ends with "Class" is treated as keyword "class"
