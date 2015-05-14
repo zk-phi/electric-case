@@ -103,13 +103,13 @@ electric-case will convert as follows:
 *** Overlays
 
 Symbols that may be converted by =electric-case= are shadowed by
-default. If this is not confortable for you, evaluate following
+default. If this is not comfortable for you, evaluate following
 expression to disable it.
 
 : (setq electric-case-pending-overlay nil)
 
 Or you may also choose another face to highlight pending symbols, that
-looks better in your colorscheme.
+looks better in your color-scheme.
 
 : (setq electric-case-pending-overlay 'highlight)
 
